@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Journal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-brand">
+                <span class="brand-icon">◈</span>
+                <span class="brand-text">Journal</span>
+            </div>
+            <ul class="nav-list">
+                <li>
+                    <a href="#" class="nav-link active" data-page="overview">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                        <span>Overview</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-page="trades">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                        <span>Trades</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-page="pnl">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        <span>PnL</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-page="exchanges">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
+                        <span>Exchanges</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-page="settings">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                        <span>Settings</span>
+                    </a>
+                </li>
+            </ul>
+            <div class="sidebar-footer">
+                <div class="sync-status" id="globalSyncStatus">
+                    <span class="sync-dot"></span>
+                    <span class="sync-text">No exchanges</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+
+            <!-- ==================== OVERVIEW ==================== -->
+            <section class="page active" id="page-overview">
+                <header class="page-header">
+                    <h1>Overview</h1>
+                    <p class="page-subtitle">Your trading performance at a glance</p>
+                </header>
+
+                <div class="stats-grid">
+                    <div class="stat-card primary">
+                        <span class="stat-label">Total PnL</span>
+                        <span class="stat-value" id="stat-total-pnl">$0.00</span>
+                        <span class="stat-note">All time</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">This Month</span>
+                        <span class="stat-value" id="stat-pnl-month">$0.00</span>
+                        <span class="stat-note" id="stat-trades-month">0 trades</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">This Week</span>
+                        <span class="stat-value" id="stat-pnl-week">$0.00</span>
+                        <span class="stat-note" id="stat-trades-week">0 trades</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Win Rate</span>
+                        <span class="stat-value" id="stat-win-rate">—</span>
+                        <span class="stat-note" id="stat-total-trades">0 total trades</span>
+                    </div>
+                </div>
+
+                <div class="stats-grid secondary">
+                    <div class="stat-card small">
+                        <span class="stat-label">Total Fees Paid</span>
+                        <span class="stat-value" id="stat-total-fees">$0.00</span>
+                    </div>
+                    <div class="stat-card small">
+                        <span class="stat-label">Exchanges</span>
+                        <span class="stat-value" id="stat-exchanges">0</span>
+                    </div>
+                    <div class="stat-card small">
+                        <span class="stat-label">Best Pair</span>
+                        <span class="stat-value" id="stat-best-pair">—</span>
+                    </div>
+                    <div class="stat-card small">
+                        <span class="stat-label">Worst Pair</span>
+                        <span class="stat-value" id="stat-worst-pair">—</span>
+                    </div>
+                </div>
+
+                <div class="empty-state" id="overview-empty">
+                    <div class="empty-icon">◈</div>
+                    <h3>No trades yet</h3>
+                    <p>Connect an exchange to start tracking your trades.</p>
+                    <button class="btn btn-primary" onclick="navigateTo('exchanges')">Add Exchange</button>
+                </div>
+            </section>
+
+            <!-- ==================== TRADES ==================== -->
+            <section class="page" id="page-trades">
+                <header class="page-header">
+                    <h1>Trades</h1>
+                    <div class="page-actions">
+                        <button class="btn btn-secondary" id="btn-export" disabled>Export</button>
+                    </div>
+                </header>
+
+                <!-- Filter bar -->
+                <div class="filter-bar">
+                    <select class="filter-select" id="filter-exchange">
+                        <option value="">All Exchanges</option>
+                    </select>
+                    <select class="filter-select" id="filter-pair">
+                        <option value="">All Pairs</option>
+                    </select>
+                    <select class="filter-select" id="filter-side">
+                        <option value="">Buy & Sell</option>
+                        <option value="buy">Buy</option>
+                        <option value="sell">Sell</option>
+                    </select>
+                    <select class="filter-select" id="filter-strategy">
+                        <option value="">All Strategies</option>
+                        <option value="__untagged__">Untagged</option>
+                    </select>
+                    <input type="date" class="filter-input" id="filter-date-from" placeholder="From">
+                    <input type="date" class="filter-input" id="filter-date-to" placeholder="To">
+                    <button class="btn btn-ghost" id="btn-clear-filters">Clear</button>
+                </div>
+
+                <!-- Trades table -->
+                <div class="table-container">
+                    <table class="data-table" id="trades-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort="timestamp">Time</th>
+                                <th class="sortable" data-sort="exchange">Exchange</th>
+                                <th class="sortable" data-sort="pair">Pair</th>
+                                <th>Side</th>
+                                <th>Qty</th>
+                                <th>Price</th>
+                                <th class="sortable" data-sort="total">Total</th>
+                                <th>Fee</th>
+                                <th>Strategy</th>
+                            </tr>
+                        </thead>
+                        <tbody id="trades-tbody">
+                            <tr class="empty-row">
+                                <td colspan="9">
+                                    <div class="table-empty">No trades loaded. Connect an exchange and sync to see data here.</div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination" id="trades-pagination">
+                    <span class="pagination-info" id="pagination-info">0 trades</span>
+                    <div class="pagination-controls">
+                        <button class="btn btn-ghost btn-sm" id="btn-prev" disabled>← Prev</button>
+                        <span class="pagination-page" id="pagination-page">Page 1</span>
+                        <button class="btn btn-ghost btn-sm" id="btn-next" disabled>Next →</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== PNL ==================== -->
+            <section class="page" id="page-pnl">
+                <header class="page-header">
+                    <h1>PnL Breakdown</h1>
+                    <div class="page-actions">
+                        <select class="filter-select" id="pnl-method">
+                            <option value="fifo">FIFO</option>
+                            <option value="avg_cost">Avg Cost</option>
+                        </select>
+                        <select class="filter-select" id="pnl-group-by">
+                            <option value="pair">By Pair</option>
+                            <option value="exchange">By Exchange</option>
+                            <option value="strategy">By Strategy</option>
+                            <option value="month">By Month</option>
+                            <option value="week">By Week</option>
+                        </select>
+                    </div>
+                </header>
+                <div class="card">
+                    <div class="phase-notice">
+                        <span class="phase-badge">Phase 3</span>
+                        PnL calculation engine will be implemented in Phase 3. The endpoint is scaffolded and ready.
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== EXCHANGES ==================== -->
+            <section class="page" id="page-exchanges">
+                <header class="page-header">
+                    <h1>Exchange Connections</h1>
+                    <div class="page-actions">
+                        <button class="btn btn-primary" id="btn-add-exchange">+ Add Exchange</button>
+                    </div>
+                </header>
+
+                <div class="exchanges-list" id="exchanges-list">
+                    <div class="empty-state">
+                        <div class="empty-icon">⟐</div>
+                        <h3>No exchanges connected</h3>
+                        <p>Connect your first exchange to start syncing trades.</p>
+                        <button class="btn btn-primary" id="btn-add-exchange-2">+ Add Exchange</button>
+                    </div>
+                </div>
+
+                <!-- Add Exchange Modal -->
+                <div class="modal-backdrop" id="modal-add-exchange" style="display: none">
+                    <div class="modal">
+                        <div class="modal-header">
+                            <h2>Connect Exchange</h2>
+                            <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-add-exchange')">✕</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="form-group">
+                                <label>Exchange</label>
+                                <select class="filter-select" id="new-exchange-type">
+                                    <option value="">Select exchange...</option>
+                                    <option value="binance">Binance</option>
+                                    <option value="bybit">Bybit</option>
+                                    <option value="gateio">Gate.io</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Label <span class="label-optional">(optional)</span></label>
+                                <input type="text" class="filter-input" id="new-exchange-label" placeholder='e.g. "Binance Spot Main"'>
+                            </div>
+                            <div class="form-group">
+                                <label>API Key</label>
+                                <input type="text" class="filter-input" id="new-exchange-key" placeholder="Paste your read-only API key">
+                            </div>
+                            <div class="form-group">
+                                <label>API Secret</label>
+                                <input type="password" class="filter-input" id="new-exchange-secret" placeholder="Paste your API secret">
+                            </div>
+                            <div class="form-group" id="passphrase-group" style="display: none">
+                                <label>Passphrase</label>
+                                <input type="password" class="filter-input" id="new-exchange-passphrase" placeholder="Exchange passphrase">
+                            </div>
+                            <div class="notice warning">
+                                <strong>Important:</strong> Only use API keys with <strong>read-only</strong> permissions. Trading, withdrawal, and transfer permissions must be disabled. The app will verify this before saving.
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-ghost" onclick="closeModal('modal-add-exchange')">Cancel</button>
+                            <button class="btn btn-primary" id="btn-submit-exchange">Connect Exchange</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sync Log -->
+                <div class="card" style="margin-top: 2rem">
+                    <h3 class="card-title">Sync Log</h3>
+                    <div class="table-container">
+                        <table class="data-table" id="sync-log-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Exchange</th>
+                                    <th>Status</th>
+                                    <th>Trades</th>
+                                    <th>Error</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sync-log-tbody">
+                                <tr class="empty-row">
+                                    <td colspan="5">
+                                        <div class="table-empty">No sync history yet.</div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== SETTINGS ==================== -->
+            <section class="page" id="page-settings">
+                <header class="page-header">
+                    <h1>Settings</h1>
+                </header>
+
+                <div class="card">
+                    <h3 class="card-title">Display Preferences</h3>
+                    <div class="form-group">
+                        <label>Default Quote Currency</label>
+                        <select class="filter-select" id="setting-quote-currency">
+                            <option value="USDT">USDT</option>
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                            <option value="BTC">BTC</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Default PnL Method</label>
+                        <select class="filter-select" id="setting-pnl-method">
+                            <option value="fifo">FIFO</option>
+                            <option value="avg_cost">Average Cost</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 1.5rem">
+                    <h3 class="card-title">Data Management</h3>
+                    <div class="form-row">
+                        <button class="btn btn-secondary" disabled>Export Database Backup</button>
+                        <button class="btn btn-danger" disabled>Reset All Data</button>
+                    </div>
+                    <p class="form-note">Backup and reset will be available in Phase 4.</p>
+                </div>
+
+                <div class="card" style="margin-top: 1.5rem">
+                    <h3 class="card-title">System Info</h3>
+                    <div class="info-list">
+                        <div class="info-row">
+                            <span class="info-label">Version</span>
+                            <span class="info-value" id="info-version">—</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Database</span>
+                            <span class="info-value">SQLite (local)</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">API Status</span>
+                            <span class="info-value" id="info-api-status">Checking...</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
