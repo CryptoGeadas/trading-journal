@@ -119,24 +119,27 @@ def _get_sync_since(db, exchange_id: str, last_sync_at: Optional[str]) -> Option
         return int(dt.timestamp() * 1000) + 1000
 
     # No trades yet — try to go back 1 year for initial sync
-    one_year_ago = int((time.time() - 365 * 86400) * 1000)
-    return one_year_ago
+    three_years_ago = int((time.time() - 3 * 365 * 86400) * 1000)
+    return three_years_ago
 
 
 def _fetch_all_trades(client: ccxt.Exchange, since: Optional[int]) -> list:
     """
     Fetch all trades using pagination.
-
-    ccxt's fetch_my_trades supports `since` (timestamp ms) and `limit` params.
-    We paginate by advancing `since` to the last trade's timestamp.
+    Handles exchange-specific quirks (e.g. Gate.io requires per-symbol queries).
     """
-    all_trades = []
-    limit = 100  # trades per page (most exchanges support 100-1000)
-    max_pages = 200  # safety limit: 200 pages × 100 = 20,000 trades max per sync
-
-    # First, load markets (required by ccxt before making private calls)
+    # Load markets first (required by ccxt)
     client.load_markets()
 
+    # Gate.io requires per-symbol fetching — use smart pair discovery
+    if client.id == "gateio":
+        print("[sync] Gate.io detected — using per-symbol fetch with pair discovery")
+        return _fetch_gateio_trades(client, since)
+
+    # Standard path: fetch all trades at once (Binance, Bybit, etc.)
+    all_trades = []
+    limit = 100
+    max_pages = 200
     current_since = since
     page = 0
 
@@ -145,84 +148,154 @@ def _fetch_all_trades(client: ccxt.Exchange, since: Optional[int]) -> list:
 
         try:
             trades = client.fetch_my_trades(
-                symbol=None,  # all symbols
+                symbol=None,
                 since=current_since,
                 limit=limit,
             )
-        except ccxt.BadRequest:
-            # Some exchanges require a symbol — fall back to per-market fetching
-            trades = _fetch_per_market(client, current_since, limit)
+        except (ccxt.BadRequest, ccxt.ArgumentsRequired):
+            # Exchange requires a symbol — fall back to per-market fetching
+            print("[sync] Exchange requires per-symbol fetch — using pair discovery")
+            trades = _fetch_discovered_pairs(client, since)
             all_trades.extend(trades)
-            break  # per-market fetch handles its own pagination
+            break
 
         if not trades:
             break
 
         all_trades.extend(trades)
 
-        # Advance pagination: move `since` past the last trade
         last_ts = trades[-1]["timestamp"]
         if last_ts == current_since:
-            # No progress — we're stuck, break to avoid infinite loop
             break
         current_since = last_ts + 1
 
-        # If we got fewer trades than the limit, we've reached the end
         if len(trades) < limit:
             break
 
-        # Respect rate limits (ccxt handles this with enableRateLimit,
-        # but add a small buffer for safety)
         time.sleep(0.1)
 
     return all_trades
 
 
-def _fetch_per_market(
-    client: ccxt.Exchange,
-    since: Optional[int],
-    limit: int,
-) -> list:
+def _fetch_gateio_trades(client: ccxt.Exchange, since: Optional[int]) -> list:
     """
-    Fallback: fetch trades per market symbol.
-    Some exchanges (like Gate.io) require a symbol parameter.
+    Gate.io specific: try the raw API first, then fall back to pair discovery.
     """
     all_trades = []
-    markets = client.load_markets()
 
-    # Only fetch markets the user has actually traded
-    # We'll try all spot markets and skip ones that return empty
-    spot_symbols = [
-        s for s, m in markets.items()
-        if m.get("spot", False) and m.get("active", True)
-    ]
+    # Approach 1: Try Gate.io's raw API endpoint which may support no-symbol queries
+    try:
+        print("[sync] Trying Gate.io raw API for all trades...")
+        page = 1
+        limit = 100
+        while True:
+            response = client.privateGetSpotMyTrades({
+                "limit": limit,
+                "page": page,
+                "from": int(since / 1000) if since else None,
+            })
+            if not response or len(response) == 0:
+                break
+            # Parse through ccxt's standard format
+            for raw_trade in response:
+                try:
+                    pair = raw_trade.get("currency_pair", "").replace("_", "/")
+                    parsed = client.parse_trade(raw_trade, client.market(pair) if pair in client.markets else None)
+                    all_trades.append(parsed)
+                except Exception:
+                    continue
+            if len(response) < limit:
+                break
+            page += 1
+            time.sleep(0.2)
 
-    for symbol in spot_symbols:
+        if all_trades:
+            print(f"[sync] Gate.io raw API returned {len(all_trades)} trades")
+            return all_trades
+    except Exception as e:
+        print(f"[sync] Gate.io raw API failed ({e}), falling back to pair discovery")
+
+    # Approach 2: Discover pairs from balance and fetch per-symbol
+    # Gate.io doesn't handle the 'since' param well, so skip it
+    return _fetch_discovered_pairs(client, since=None)
+
+
+def _fetch_discovered_pairs(client: ccxt.Exchange, since: Optional[int]) -> list:
+    """
+    Discover which pairs the user likely traded by checking their balance,
+    then fetch trades only for those pairs. Much faster than scanning all markets.
+    """
+    all_trades = []
+    limit = 100
+
+    # Step 1: Get balance to find currencies the user holds (or has held)
+    discovered_currencies = set()
+    try:
+        balance = client.fetch_balance()
+        for currency, amounts in balance.get("total", {}).items():
+            if amounts and float(amounts) > 0:
+                discovered_currencies.add(currency)
+        print(f"[sync] Found {len(discovered_currencies)} currencies in balance: {discovered_currencies}")
+    except Exception as e:
+        print(f"[sync] Could not fetch balance for pair discovery: {e}")
+
+    # Always include common quote currencies
+    quote_currencies = ["USDT", "USDC", "BTC", "ETH", "USD"]
+
+    # Step 2: Build candidate pairs
+    candidate_pairs = set()
+    for base in discovered_currencies:
+        if base in quote_currencies:
+            continue  # Don't pair USDT/USDT etc.
+        for quote in quote_currencies:
+            pair = f"{base}/{quote}"
+            if pair in client.markets:
+                candidate_pairs.add(pair)
+
+    # Also add quote/quote pairs (e.g. BTC/USDT, ETH/USDT)
+    for base in ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX",
+                  "DOT", "MATIC", "LINK", "UNI", "ONDO", "AAVE", "OP", "ARB",
+                  "PEPE", "SHIB", "WLD", "SUI", "SEI", "TIA", "JUP", "WIF"]:
+        for quote in quote_currencies:
+            pair = f"{base}/{quote}"
+            if pair in client.markets:
+                candidate_pairs.add(pair)
+
+    print(f"[sync] Checking {len(candidate_pairs)} candidate pairs for trades...")
+
+    # Step 3: Fetch trades per pair
+    pairs_with_trades = 0
+    for pair in sorted(candidate_pairs):
         try:
-            trades = client.fetch_my_trades(
-                symbol=symbol,
-                since=since,
-                limit=limit,
-            )
+            # Some exchanges (Gate.io) don't handle 'since' well — omit if None
+            fetch_kwargs = {"symbol": pair, "limit": limit}
+            if since is not None:
+                fetch_kwargs["since"] = since
+            trades = client.fetch_my_trades(**fetch_kwargs)
             if trades:
+                pairs_with_trades += 1
                 all_trades.extend(trades)
-                # Paginate within this symbol
+                print(f"[sync]   {pair}: found {len(trades)} trades")
+
+                # Paginate within this pair
                 while len(trades) == limit:
                     last_ts = trades[-1]["timestamp"] + 1
                     trades = client.fetch_my_trades(
-                        symbol=symbol,
+                        symbol=pair,
                         since=last_ts,
                         limit=limit,
                     )
                     if trades:
                         all_trades.extend(trades)
-                    time.sleep(0.1)
+                    time.sleep(0.2)
+
         except (ccxt.BadSymbol, ccxt.BadRequest):
             continue
         except Exception:
-            continue  # Skip problematic symbols, don't fail the whole sync
-        time.sleep(0.05)
+            continue
+        time.sleep(0.1)  # Rate limit buffer
 
+    print(f"[sync] Found trades in {pairs_with_trades} pairs, {len(all_trades)} total trades")
     return all_trades
 
 
