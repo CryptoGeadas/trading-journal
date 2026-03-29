@@ -4,6 +4,7 @@ import uuid
 import time
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 import ccxt
@@ -118,25 +119,30 @@ def _get_sync_since(db, exchange_id: str, last_sync_at: Optional[str]) -> Option
         dt = datetime.fromisoformat(row["latest"].replace("Z", "+00:00"))
         return int(dt.timestamp() * 1000) + 1000
 
-    # No trades yet — try to go back 1 year for initial sync
-    three_years_ago = int((time.time() - 3 * 365 * 86400) * 1000)
-    return three_years_ago
+    # No trades yet — start from beginning of current year
+    start_of_year = int(datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
+    return start_of_year
 
 
 def _fetch_all_trades(client: ccxt.Exchange, since: Optional[int]) -> list:
     """
     Fetch all trades using pagination.
-    Handles exchange-specific quirks (e.g. Gate.io requires per-symbol queries).
+    Handles exchange-specific quirks — most exchanges need per-symbol queries.
     """
     # Load markets first (required by ccxt)
     client.load_markets()
 
-    # Gate.io requires per-symbol fetching — use smart pair discovery
+    # Gate.io: doesn't handle 'since' param, needs special treatment
     if client.id == "gateio":
         print("[sync] Gate.io detected — using per-symbol fetch with pair discovery")
         return _fetch_gateio_trades(client, since)
 
-    # Standard path: fetch all trades at once (Binance, Bybit, etc.)
+    # Binance: requires a symbol, use pair discovery with 'since' param
+    if client.id == "binance":
+        print("[sync] Binance detected — using per-symbol fetch with pair discovery")
+        return _fetch_discovered_pairs(client, since)
+
+    # Standard path: try fetching all trades at once (Bybit, etc.)
     all_trades = []
     limit = 100
     max_pages = 200
@@ -152,7 +158,7 @@ def _fetch_all_trades(client: ccxt.Exchange, since: Optional[int]) -> list:
                 since=current_since,
                 limit=limit,
             )
-        except (ccxt.BadRequest, ccxt.ArgumentsRequired):
+        except (ccxt.BadRequest, ccxt.ArgumentsRequired, TypeError):
             # Exchange requires a symbol — fall back to per-market fetching
             print("[sync] Exchange requires per-symbol fetch — using pair discovery")
             trades = _fetch_discovered_pairs(client, since)
@@ -164,8 +170,8 @@ def _fetch_all_trades(client: ccxt.Exchange, since: Optional[int]) -> list:
 
         all_trades.extend(trades)
 
-        last_ts = trades[-1]["timestamp"]
-        if last_ts == current_since:
+        last_ts = trades[-1].get("timestamp")
+        if not last_ts or last_ts == current_since:
             break
         current_since = last_ts + 1
 
@@ -217,18 +223,28 @@ def _fetch_gateio_trades(client: ccxt.Exchange, since: Optional[int]) -> list:
 
     # Approach 2: Discover pairs from balance and fetch per-symbol
     # Gate.io doesn't handle the 'since' param well, so skip it
-    return _fetch_discovered_pairs(client, since=None)
+    trades = _fetch_discovered_pairs(client, since=None)
+
+    # Post-fetch filter: only keep trades from 2026 onwards
+    start_of_year_ms = int(datetime(2026, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
+    filtered = [t for t in trades if (t.get("timestamp") or 0) >= start_of_year_ms]
+    if len(filtered) < len(trades):
+        print(f"[sync] Filtered to {len(filtered)} trades in 2026 (from {len(trades)} total)")
+    return filtered
 
 
 def _fetch_discovered_pairs(client: ccxt.Exchange, since: Optional[int]) -> list:
     """
     Discover which pairs the user likely traded by checking their balance,
     then fetch trades only for those pairs. Much faster than scanning all markets.
+
+    Also reads extra_pairs.txt from the data/ folder for pairs not discoverable
+    from the balance (e.g. currencies you've fully sold out of).
     """
     all_trades = []
     limit = 100
 
-    # Step 1: Get balance to find currencies the user holds (or has held)
+    # Step 1: Get currencies from balance (non-zero only — fast and reliable)
     discovered_currencies = set()
     try:
         balance = client.fetch_balance()
@@ -242,17 +258,17 @@ def _fetch_discovered_pairs(client: ccxt.Exchange, since: Optional[int]) -> list
     # Always include common quote currencies
     quote_currencies = ["USDT", "USDC", "BTC", "ETH", "USD"]
 
-    # Step 2: Build candidate pairs
+    # Step 2: Build candidate pairs from balance
     candidate_pairs = set()
     for base in discovered_currencies:
         if base in quote_currencies:
-            continue  # Don't pair USDT/USDT etc.
+            continue
         for quote in quote_currencies:
             pair = f"{base}/{quote}"
             if pair in client.markets:
                 candidate_pairs.add(pair)
 
-    # Also add quote/quote pairs (e.g. BTC/USDT, ETH/USDT)
+    # Also add common pairs (catches popular tokens even if not in balance)
     for base in ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX",
                   "DOT", "MATIC", "LINK", "UNI", "ONDO", "AAVE", "OP", "ARB",
                   "PEPE", "SHIB", "WLD", "SUI", "SEI", "TIA", "JUP", "WIF"]:
@@ -261,11 +277,31 @@ def _fetch_discovered_pairs(client: ccxt.Exchange, since: Optional[int]) -> list
             if pair in client.markets:
                 candidate_pairs.add(pair)
 
+    # Step 3: Read extra pairs from file (for fully-sold positions etc.)
+    extra_pairs_file = Path(__file__).resolve().parent.parent.parent / "data" / "extra_pairs.txt"
+    if extra_pairs_file.exists():
+        try:
+            lines = extra_pairs_file.read_text().strip().splitlines()
+            for line in lines:
+                pair = line.strip().upper()
+                if "/" in pair and pair in client.markets:
+                    candidate_pairs.add(pair)
+                    print(f"[sync]   Added extra pair: {pair}")
+                elif pair and not pair.startswith("#"):
+                    print(f"[sync]   Skipped invalid extra pair: {pair}")
+        except Exception as e:
+            print(f"[sync] Warning: could not read extra_pairs.txt: {e}")
+
     print(f"[sync] Checking {len(candidate_pairs)} candidate pairs for trades...")
 
     # Step 3: Fetch trades per pair
     pairs_with_trades = 0
+    checked = 0
+    total_pairs = len(candidate_pairs)
     for pair in sorted(candidate_pairs):
+        checked += 1
+        if checked % 50 == 0:
+            print(f"[sync] Progress: {checked}/{total_pairs} pairs checked, {len(all_trades)} trades found so far...")
         try:
             # Some exchanges (Gate.io) don't handle 'since' well — omit if None
             fetch_kwargs = {"symbol": pair, "limit": limit}
