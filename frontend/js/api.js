@@ -60,6 +60,7 @@ const API = {
     overview:     ()            => API.get('/overview'),
     trades:       (params = {}) => API.get('/trades', params),
     trade:        (id)          => API.get(`/trades/${id}`),
+    fills:        (orderId)     => API.get(`/trades/fills/${orderId}`),
     updateTrade:  (id, body)    => API.patch(`/trades/${id}`, body),
     exchanges:    ()            => API.get('/exchanges'),
     addExchange:  (body)        => API.post('/exchanges', body),

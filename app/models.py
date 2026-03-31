@@ -23,13 +23,14 @@ class OverviewStats(BaseModel):
     worst_pair: Optional[str] = None
 
 
-# --- Trades ---
+# --- Trades (individual fills) ---
 
 class TradeOut(BaseModel):
     id: str
     exchange_id: str
     exchange: str
     external_id: str
+    order_id: Optional[str] = None
     timestamp: str
     pair: str
     base_currency: str
@@ -52,6 +53,38 @@ class TradeUpdate(BaseModel):
 
 class TradesPage(BaseModel):
     trades: list[TradeOut]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+# --- Orders (grouped fills) ---
+
+class OrderOut(BaseModel):
+    id: str
+    group_id: str
+    exchange_id: str
+    exchange: str
+    order_id: Optional[str] = None
+    timestamp: str
+    pair: str
+    base_currency: str
+    quote_currency: str
+    side: str
+    quantity: float
+    price: float
+    total: float
+    fee: float
+    fee_currency: str
+    trade_type: str
+    strategy: Optional[str] = None
+    notes: Optional[str] = None
+    fill_count: int = 1
+
+
+class OrdersPage(BaseModel):
+    trades: list[OrderOut]
     total: int
     page: int
     page_size: int

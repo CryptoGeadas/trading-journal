@@ -346,6 +346,9 @@ def _insert_trades(db, exchange_id: str, exchange: str, trades: list) -> int:
         trade_id = str(uuid.uuid4())
         external_id = str(t.get("id", t.get("order", trade_id)))
 
+        # Order ID — links multiple fills from the same order
+        order_id = str(t.get("order", "")) if t.get("order") else None
+
         # Parse the symbol (e.g. "ETH/USDT")
         symbol = t.get("symbol", "")
         parts = symbol.split("/") if "/" in symbol else [symbol, ""]
@@ -374,13 +377,13 @@ def _insert_trades(db, exchange_id: str, exchange: str, trades: list) -> int:
         try:
             db.execute(
                 """INSERT INTO trades
-                   (id, exchange_id, exchange, external_id, timestamp,
+                   (id, exchange_id, exchange, external_id, order_id, timestamp,
                     pair, base_currency, quote_currency, side,
                     quantity, price, total, fee, fee_currency,
                     trade_type, synced_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
                 [
-                    trade_id, exchange_id, exchange, external_id, timestamp_str,
+                    trade_id, exchange_id, exchange, external_id, order_id, timestamp_str,
                     symbol, base, quote, t.get("side", "buy"),
                     amount, price, total, float(fee_cost), fee_currency,
                     t.get("type", "spot") or "spot",

@@ -144,14 +144,20 @@ function renderTradesTable(trades) {
     if (!tbody) return;
 
     if (trades.length === 0) {
-        tbody.innerHTML = `<tr class="empty-row"><td colspan="9">
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="10">
             <div class="table-empty">No trades found matching your filters.</div>
         </td></tr>`;
         return;
     }
 
-    tbody.innerHTML = trades.map(t => `
-        <tr data-id="${t.id}">
+    tbody.innerHTML = trades.map(t => {
+        const hasMultipleFills = t.fill_count > 1;
+        const expandBtn = hasMultipleFills
+            ? `<span class="fill-toggle" onclick="toggleFills('${t.order_id || t.id}', this)" title="Click to expand fills">▶ ${t.fill_count}</span>`
+            : `<span style="color:var(--text-muted)">1</span>`;
+
+        return `
+        <tr data-id="${t.id}" class="${hasMultipleFills ? 'expandable' : ''}">
             <td class="mono">${formatTime(t.timestamp)}</td>
             <td>${capitalise(t.exchange)}</td>
             <td><strong>${t.pair}</strong></td>
@@ -161,12 +167,50 @@ function renderTradesTable(trades) {
             <td class="mono">${formatCurrency(t.total)}</td>
             <td class="mono">${formatFee(t.fee, t.fee_currency)}</td>
             <td>${t.strategy ? `<span class="phase-badge">${t.strategy}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
-        </tr>
-    `).join('');
+            <td class="fills-col">${expandBtn}</td>
+        </tr>`;
+    }).join('');
+}
+
+async function toggleFills(orderId, toggleEl) {
+    const parentRow = toggleEl.closest('tr');
+    const existingFills = parentRow.parentNode.querySelectorAll(`.fill-row[data-order="${orderId}"]`);
+
+    // If fills are already shown, collapse them
+    if (existingFills.length > 0) {
+        existingFills.forEach(r => r.remove());
+        toggleEl.textContent = `▶ ${toggleEl.textContent.replace('▼ ', '').replace('▶ ', '')}`;
+        return;
+    }
+
+    // Fetch fills from the API
+    try {
+        const fills = await API.fills(orderId);
+        const fillRows = fills.map(f => `
+            <tr class="fill-row" data-order="${orderId}">
+                <td class="mono fill-indent">${formatTime(f.timestamp)}</td>
+                <td style="color:var(--text-muted)">↳ fill</td>
+                <td>${f.pair}</td>
+                <td class="side-${f.side}">${f.side.toUpperCase()}</td>
+                <td class="mono">${formatQty(f.quantity)}</td>
+                <td class="mono">${formatPrice(f.price)}</td>
+                <td class="mono">${formatCurrency(f.total)}</td>
+                <td class="mono">${formatFee(f.fee, f.fee_currency)}</td>
+                <td></td>
+                <td></td>
+            </tr>
+        `).join('');
+
+        parentRow.insertAdjacentHTML('afterend', fillRows);
+        const count = toggleEl.textContent.replace('▶ ', '').replace('▼ ', '');
+        toggleEl.textContent = `▼ ${count}`;
+    } catch (err) {
+        console.error('Failed to load fills:', err);
+    }
 }
 
 function renderPagination(data) {
-    setText('pagination-info', `${data.total} trades`);
+    setText('pagination-info', `${data.total} orders`);
     setText('pagination-page', `Page ${data.page} of ${data.total_pages}`);
 
     const btnPrev = document.getElementById('btn-prev');
