@@ -121,7 +121,11 @@
                 <header class="page-header">
                     <h1>Trades</h1>
                     <div class="page-actions">
-                        <button class="btn btn-secondary" id="btn-export" disabled>Export</button>
+                        <select class="filter-select" id="export-format">
+                            <option value="xlsx">XLSX</option>
+                            <option value="csv">CSV</option>
+                        </select>
+                        <button class="btn btn-secondary" id="btn-export">Export</button>
                     </div>
                 </header>
 

@@ -444,6 +444,21 @@ document.addEventListener('DOMContentLoaded', () => {
         loadTrades();
     });
 
+    // Export
+    document.getElementById('btn-export')?.addEventListener('click', () => {
+        const format = document.getElementById('export-format')?.value || 'xlsx';
+        const filters = getTradeFilters();
+        const params = new URLSearchParams();
+        params.set('format', format);
+        params.set('order_by', tradesState.orderBy);
+        params.set('order_dir', tradesState.orderDir);
+        Object.entries(filters).forEach(([k, v]) => {
+            if (v) params.set(k, v);
+        });
+        // Trigger download via direct navigation
+        window.location.href = `/api/export?${params.toString()}`;
+    });
+
     // Sortable columns
     document.querySelectorAll('.sortable').forEach(th => {
         th.addEventListener('click', () => {
