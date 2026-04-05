@@ -658,6 +658,211 @@ tr.expandable {
     align-items: center;
 }
 
+/* ---- Strategy Cards ---- */
+.strategies-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.strategy-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    transition: border-color 0.15s;
+}
+
+.strategy-card:hover {
+    border-color: var(--border-light);
+}
+
+.strategy-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.strategy-card-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+}
+
+.strategy-card-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.strategy-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
+}
+
+.strategy-trade-count {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    padding: 0.2rem 0.5rem;
+    background: var(--bg-raised);
+    border-radius: 3px;
+}
+
+.strategy-playbook-display {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: var(--bg-raised);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+}
+
+.strategy-playbook-display pre {
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* ---- Colour Picker ---- */
+.colour-picker {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+}
+
+.colour-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    padding: 0;
+}
+
+.colour-swatch:hover {
+    transform: scale(1.15);
+}
+
+.colour-swatch.active {
+    border-color: var(--text-primary);
+    box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px currentColor;
+}
+
+/* ---- Strategy Playbook Textarea ---- */
+.strategy-playbook {
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    resize: vertical;
+    min-height: 120px;
+    width: 100%;
+}
+
+.modal-wide {
+    max-width: 600px;
+}
+
+/* ---- Strategy Badge (on trades table) ---- */
+.strategy-badge {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.strategy-cell {
+    cursor: pointer;
+    position: relative;
+}
+
+.strategy-cell:hover {
+    background: var(--bg-hover);
+}
+
+/* ---- Trade Tag Popup ---- */
+.tag-popup {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 50;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    min-width: 180px;
+    overflow: hidden;
+}
+
+.tag-popup-header {
+    padding: 0.6rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+}
+
+.tag-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.tag-option:hover {
+    background: var(--bg-hover);
+}
+
+.tag-option.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+}
+
+.tag-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.tag-clear {
+    border-top: 1px solid var(--border);
+    color: var(--red);
+    font-size: 0.8rem;
+}
+
+.tag-empty {
+    padding: 1rem 0.75rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    text-align: center;
+    line-height: 1.5;
+}
+
+.tag-empty a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.tag-empty a:hover {
+    text-decoration: underline;
+}
+
 /* ---- Responsive ---- */
 @media (max-width: 900px) {
     .sidebar {

@@ -36,6 +36,12 @@
                     </a>
                 </li>
                 <li>
+                    <a href="#" class="nav-link" data-page="strategies">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+                        <span>Strategies</span>
+                    </a>
+                </li>
+                <li>
                     <a href="#" class="nav-link" data-page="exchanges">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
                         <span>Exchanges</span>
@@ -211,6 +217,89 @@
                     <div class="phase-notice">
                         <span class="phase-badge">Phase 3</span>
                         PnL calculation engine will be implemented in Phase 3. The endpoint is scaffolded and ready.
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== STRATEGIES ==================== -->
+            <section class="page" id="page-strategies">
+                <header class="page-header">
+                    <h1>Strategies</h1>
+                    <div class="page-actions">
+                        <button class="btn btn-ghost btn-sm" onclick="importStrategies()">Import</button>
+                        <button class="btn btn-ghost btn-sm" onclick="exportStrategies()">Export</button>
+                        <button class="btn btn-primary" id="btn-add-strategy">+ New Strategy</button>
+                    </div>
+                </header>
+
+                <div class="strategies-grid" id="strategies-list">
+                    <div class="empty-state">
+                        <div class="empty-icon">📖</div>
+                        <h3>No strategies yet</h3>
+                        <p>Create your first strategy to start building your playbook.</p>
+                        <button class="btn btn-primary" onclick="openModal('modal-strategy')">+ New Strategy</button>
+                    </div>
+                </div>
+
+                <!-- Strategy Create/Edit Modal -->
+                <div class="modal-backdrop" id="modal-strategy" style="display: none">
+                    <div class="modal modal-wide">
+                        <div class="modal-header">
+                            <h2 id="strategy-modal-title">New Strategy</h2>
+                            <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-strategy')">✕</button>
+                        </div>
+                        <div class="modal-body">
+                            <input type="hidden" id="strategy-edit-id" value="">
+                            <div class="form-group">
+                                <label>Strategy Name</label>
+                                <input type="text" class="filter-input" id="strategy-name" placeholder='e.g. "Momentum Scalp", "DCA Accumulate"'>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group" style="flex: 1">
+                                    <label>Colour</label>
+                                    <div class="colour-picker" id="strategy-colour-picker">
+                                        <button class="colour-swatch active" data-colour="#6c9cfc" style="background:#6c9cfc" title="Blue"></button>
+                                        <button class="colour-swatch" data-colour="#34d399" style="background:#34d399" title="Green"></button>
+                                        <button class="colour-swatch" data-colour="#f87171" style="background:#f87171" title="Red"></button>
+                                        <button class="colour-swatch" data-colour="#fbbf24" style="background:#fbbf24" title="Yellow"></button>
+                                        <button class="colour-swatch" data-colour="#a78bfa" style="background:#a78bfa" title="Purple"></button>
+                                        <button class="colour-swatch" data-colour="#f472b6" style="background:#f472b6" title="Pink"></button>
+                                        <button class="colour-swatch" data-colour="#fb923c" style="background:#fb923c" title="Orange"></button>
+                                        <button class="colour-swatch" data-colour="#38bdf8" style="background:#38bdf8" title="Sky"></button>
+                                        <button class="colour-swatch" data-colour="#e2e8f0" style="background:#e2e8f0" title="Light"></button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Short Description</label>
+                                <input type="text" class="filter-input" id="strategy-description" placeholder="One-liner about this strategy">
+                            </div>
+                            <div class="form-group">
+                                <label>Playbook <span class="label-optional">(rules, entry/exit criteria, notes)</span></label>
+                                <textarea class="filter-input strategy-playbook" id="strategy-playbook" rows="8" placeholder="Write your strategy rules here...&#10;&#10;Example:&#10;- Entry: Buy when RSI < 30 on 4h chart&#10;- Exit: Sell at 10% profit or -5% stop loss&#10;- Max position size: 5% of portfolio&#10;- Only trade during London + NY sessions"></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-ghost" onclick="closeModal('modal-strategy')">Cancel</button>
+                            <button class="btn btn-primary" id="btn-save-strategy">Save Strategy</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delete Confirmation Modal -->
+                <div class="modal-backdrop" id="modal-delete-strategy" style="display: none">
+                    <div class="modal">
+                        <div class="modal-header">
+                            <h2>Delete Strategy</h2>
+                            <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-delete-strategy')">✕</button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Are you sure you want to delete <strong id="delete-strategy-name"></strong>? Trades tagged with this strategy will be untagged.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-ghost" onclick="closeModal('modal-delete-strategy')">Cancel</button>
+                            <button class="btn btn-danger" id="btn-confirm-delete-strategy">Delete</button>
+                        </div>
                     </div>
                 </div>
             </section>

@@ -135,8 +135,28 @@ class PnlResult(BaseModel):
 # --- Strategies ---
 
 class StrategyOut(BaseModel):
-    strategy: str
-    trade_count: int
+    id: str
+    name: str
+    description: Optional[str] = None
+    colour: str = "#6c9cfc"
+    playbook: Optional[str] = None
+    trade_count: int = 0
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class StrategyCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    colour: str = "#6c9cfc"
+    playbook: Optional[str] = None
+
+
+class StrategyUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    colour: Optional[str] = None
+    playbook: Optional[str] = None
 
 
 # --- Sync Log ---

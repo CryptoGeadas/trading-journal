@@ -26,10 +26,11 @@ function navigateTo(page) {
 
 function loadPageData(page) {
     switch (page) {
-        case 'overview':  loadOverview(); break;
-        case 'trades':    loadTrades();   break;
-        case 'exchanges': loadExchanges(); break;
-        case 'settings':  loadSettings();  break;
+        case 'overview':    loadOverview(); break;
+        case 'trades':      loadTrades();   break;
+        case 'strategies':  loadStrategies(); break;
+        case 'exchanges':   loadExchanges(); break;
+        case 'settings':    loadSettings();  break;
         // pnl: Phase 3
     }
 }
@@ -125,12 +126,13 @@ async function loadFilterOptions() {
 
         // Load strategies
         const strategies = await API.strategies();
+        _strategyCache = strategies;  // Update cache
         const stratSelect = document.getElementById('filter-strategy');
         if (stratSelect && stratSelect.options.length <= 2) {
             strategies.forEach(s => {
                 const opt = document.createElement('option');
-                opt.value = s.strategy;
-                opt.textContent = s.strategy;
+                opt.value = s.name;
+                opt.textContent = s.name;
                 stratSelect.appendChild(opt);
             });
         }
@@ -153,8 +155,12 @@ function renderTradesTable(trades) {
     tbody.innerHTML = trades.map(t => {
         const hasMultipleFills = t.fill_count > 1;
         const expandBtn = hasMultipleFills
-            ? `<span class="fill-toggle" onclick="toggleFills('${t.order_id || t.id}', this)" title="Click to expand fills">▶ ${t.fill_count}</span>`
+            ? `<span class="fill-toggle" onclick="event.stopPropagation(); toggleFills('${t.order_id || t.id}', this)" title="Click to expand fills">▶ ${t.fill_count}</span>`
             : `<span style="color:var(--text-muted)">1</span>`;
+
+        const strategyCell = t.strategy
+            ? `<span class="strategy-badge" style="background:${getStrategyColour(t.strategy)}22; color:${getStrategyColour(t.strategy)}; border: 1px solid ${getStrategyColour(t.strategy)}44">${t.strategy}</span>`
+            : '<span style="color:var(--text-muted)">—</span>';
 
         return `
         <tr data-id="${t.id}" class="${hasMultipleFills ? 'expandable' : ''}">
@@ -166,7 +172,7 @@ function renderTradesTable(trades) {
             <td class="mono">${formatPrice(t.price)}</td>
             <td class="mono">${formatCurrency(t.total)}</td>
             <td class="mono">${formatFee(t.fee, t.fee_currency)}</td>
-            <td>${t.strategy ? `<span class="phase-badge">${t.strategy}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
+            <td class="strategy-cell" onclick="event.stopPropagation(); openTagPopup('${t.id}', this, '${t.strategy || ''}')">${strategyCell}</td>
             <td class="fills-col">${expandBtn}</td>
         </tr>`;
     }).join('');
@@ -381,6 +387,231 @@ function setText(id, text) {
     if (el) el.textContent = text;
 }
 
+// ---- Strategy colour cache ----
+let _strategyCache = [];
+
+function getStrategyColour(name) {
+    const s = _strategyCache.find(s => s.name === name);
+    return s ? s.colour : '#6c9cfc';
+}
+
+// ---- Strategies Page ----
+async function loadStrategies() {
+    try {
+        const strategies = await API.strategies();
+        _strategyCache = strategies;
+        const container = document.getElementById('strategies-list');
+        if (!container) return;
+
+        if (strategies.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📖</div>
+                    <h3>No strategies yet</h3>
+                    <p>Create your first strategy to start building your playbook.</p>
+                    <button class="btn btn-primary" onclick="openStrategyModal()">+ New Strategy</button>
+                </div>`;
+            return;
+        }
+
+        container.innerHTML = strategies.map(s => `
+            <div class="strategy-card" style="border-left: 4px solid ${s.colour}">
+                <div class="strategy-card-header">
+                    <div>
+                        <h3 class="strategy-card-name" style="color: ${s.colour}">${s.name}</h3>
+                        ${s.description ? `<p class="strategy-card-desc">${s.description}</p>` : ''}
+                    </div>
+                    <div class="strategy-card-actions">
+                        <span class="strategy-trade-count">${s.trade_count} trade${s.trade_count !== 1 ? 's' : ''}</span>
+                        <button class="btn btn-ghost btn-sm" onclick="openStrategyModal('${s.id}')">Edit</button>
+                        <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="confirmDeleteStrategy('${s.id}', '${s.name}')">Delete</button>
+                    </div>
+                </div>
+                ${s.playbook ? `<div class="strategy-playbook-display"><pre>${escapeHtml(s.playbook)}</pre></div>` : ''}
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error('Failed to load strategies:', err);
+    }
+}
+
+function openStrategyModal(editId = null) {
+    const modal = document.getElementById('modal-strategy');
+    const title = document.getElementById('strategy-modal-title');
+    const idField = document.getElementById('strategy-edit-id');
+
+    // Reset form
+    document.getElementById('strategy-name').value = '';
+    document.getElementById('strategy-description').value = '';
+    document.getElementById('strategy-playbook').value = '';
+    document.querySelectorAll('.colour-swatch').forEach(s => s.classList.remove('active'));
+    document.querySelector('.colour-swatch[data-colour="#6c9cfc"]')?.classList.add('active');
+
+    if (editId) {
+        title.textContent = 'Edit Strategy';
+        idField.value = editId;
+        // Load existing data
+        const s = _strategyCache.find(s => s.id === editId);
+        if (s) {
+            document.getElementById('strategy-name').value = s.name;
+            document.getElementById('strategy-description').value = s.description || '';
+            document.getElementById('strategy-playbook').value = s.playbook || '';
+            document.querySelectorAll('.colour-swatch').forEach(sw => {
+                sw.classList.toggle('active', sw.dataset.colour === s.colour);
+            });
+        }
+    } else {
+        title.textContent = 'New Strategy';
+        idField.value = '';
+    }
+
+    modal.style.display = 'flex';
+}
+
+async function saveStrategy() {
+    const editId = document.getElementById('strategy-edit-id').value;
+    const name = document.getElementById('strategy-name').value.trim();
+    const description = document.getElementById('strategy-description').value.trim();
+    const playbook = document.getElementById('strategy-playbook').value;
+    const activeSwatch = document.querySelector('.colour-swatch.active');
+    const colour = activeSwatch ? activeSwatch.dataset.colour : '#6c9cfc';
+
+    if (!name) {
+        alert('Please enter a strategy name.');
+        return;
+    }
+
+    try {
+        if (editId) {
+            await API.updateStrategy(editId, { name, description, colour, playbook });
+        } else {
+            await API.createStrategy({ name, description, colour, playbook });
+        }
+        closeModal('modal-strategy');
+        loadStrategies();
+    } catch (err) {
+        alert('Failed to save strategy: ' + err.message);
+    }
+}
+
+function confirmDeleteStrategy(id, name) {
+    document.getElementById('delete-strategy-name').textContent = name;
+    document.getElementById('btn-confirm-delete-strategy').onclick = async () => {
+        try {
+            await API.deleteStrategy(id);
+            closeModal('modal-delete-strategy');
+            loadStrategies();
+        } catch (err) {
+            alert('Failed to delete: ' + err.message);
+        }
+    };
+    openModal('modal-delete-strategy');
+}
+
+async function exportStrategies() {
+    try {
+        const data = await API.get('/strategies-export');
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'strategies_backup.json';
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        alert('Export failed: ' + err.message);
+    }
+}
+
+async function importStrategies() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            const result = await API.post('/strategies-import', data);
+            alert(`Imported ${result.imported} strategies, skipped ${result.skipped} duplicates.`);
+            loadStrategies();
+        } catch (err) {
+            alert('Import failed: ' + err.message);
+        }
+    };
+    input.click();
+}
+
+// ---- Trade Tagging Popup ----
+function openTagPopup(tradeId, cell, currentStrategy) {
+    // Close any existing popup
+    closeTagPopup();
+
+    const strategies = _strategyCache;
+    const options = strategies.map(s =>
+        `<div class="tag-option ${s.name === currentStrategy ? 'active' : ''}" onclick="tagTrade('${tradeId}', '${s.name}')">
+            <span class="tag-dot" style="background:${s.colour}"></span>
+            ${s.name}
+        </div>`
+    ).join('');
+
+    const clearOption = currentStrategy
+        ? `<div class="tag-option tag-clear" onclick="tagTrade('${tradeId}', '')">✕ Remove tag</div>`
+        : '';
+
+    const noStrategies = strategies.length === 0
+        ? `<div class="tag-empty">No strategies yet.<br><a href="#" onclick="event.preventDefault(); closeTagPopup(); navigateTo('strategies')">Create one</a></div>`
+        : '';
+
+    const popup = document.createElement('div');
+    popup.className = 'tag-popup';
+    popup.id = 'tag-popup';
+    popup.innerHTML = `
+        <div class="tag-popup-header">Assign Strategy</div>
+        ${noStrategies}
+        ${options}
+        ${clearOption}
+    `;
+
+    cell.style.position = 'relative';
+    cell.appendChild(popup);
+
+    // Close on outside click
+    setTimeout(() => {
+        document.addEventListener('click', _closeTagHandler, { once: true });
+    }, 10);
+}
+
+function _closeTagHandler(e) {
+    const popup = document.getElementById('tag-popup');
+    if (popup && !popup.contains(e.target)) {
+        closeTagPopup();
+    }
+}
+
+function closeTagPopup() {
+    const popup = document.getElementById('tag-popup');
+    if (popup) popup.remove();
+    document.removeEventListener('click', _closeTagHandler);
+}
+
+async function tagTrade(tradeId, strategyName) {
+    try {
+        await API.updateTrade(tradeId, { strategy: strategyName || '' });
+        closeTagPopup();
+        loadTrades();  // Refresh table
+    } catch (err) {
+        alert('Failed to tag trade: ' + err.message);
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // ---- Global sync status ----
 async function updateGlobalSyncStatus() {
     try {
@@ -506,6 +737,45 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target === backdrop) backdrop.style.display = 'none';
         });
     });
+
+    // Strategy: add button
+    document.getElementById('btn-add-strategy')?.addEventListener('click', () => openStrategyModal());
+
+    // Strategy: save button
+    document.getElementById('btn-save-strategy')?.addEventListener('click', saveStrategy);
+
+    // Strategy: colour picker
+    document.querySelectorAll('.colour-swatch').forEach(swatch => {
+        swatch.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.querySelectorAll('.colour-swatch').forEach(s => s.classList.remove('active'));
+            swatch.classList.add('active');
+        });
+    });
+
+    // Strategy: update filter dropdown on trades page
+    async function refreshStrategyFilter() {
+        try {
+            const strategies = await API.strategies();
+            _strategyCache = strategies;
+            const stratSelect = document.getElementById('filter-strategy');
+            if (stratSelect) {
+                // Keep first two options (All / Untagged)
+                while (stratSelect.options.length > 2) stratSelect.remove(2);
+                strategies.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.name;
+                    opt.textContent = s.name;
+                    stratSelect.appendChild(opt);
+                });
+            }
+        } catch (err) {
+            // Non-critical
+        }
+    }
+
+    // Preload strategy cache for trade colours
+    refreshStrategyFilter();
 
     // Initial load
     navigateTo('overview');

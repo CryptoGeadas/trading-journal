@@ -5,7 +5,7 @@ from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "journal.db"
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 MIGRATIONS = {
     1: """
@@ -70,6 +70,19 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_trades_order_id ON trades(order_id);
 
     PRAGMA user_version = 2;
+    """,
+    3: """
+    CREATE TABLE IF NOT EXISTS strategies (
+        id              TEXT PRIMARY KEY,
+        name            TEXT NOT NULL UNIQUE,
+        description     TEXT,
+        colour          TEXT NOT NULL DEFAULT '#6c9cfc',
+        playbook        TEXT,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    PRAGMA user_version = 3;
     """,
 }
 

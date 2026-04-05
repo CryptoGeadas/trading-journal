@@ -226,23 +226,6 @@ async def update_trade(trade_id: str, update: TradeUpdate):
         db.close()
 
 
-@router.get("/strategies")
-async def list_strategies():
-    """List all strategy tags with trade counts."""
-    db = get_db()
-    try:
-        rows = db.execute(
-            """SELECT strategy, COUNT(DISTINCT COALESCE(order_id, id)) as trade_count
-               FROM trades
-               WHERE strategy IS NOT NULL
-               GROUP BY strategy
-               ORDER BY trade_count DESC"""
-        ).fetchall()
-        return [{"strategy": r["strategy"], "trade_count": r["trade_count"]} for r in rows]
-    finally:
-        db.close()
-
-
 @router.get("/pairs")
 async def list_pairs():
     """List all unique trading pairs (for filter dropdowns)."""
