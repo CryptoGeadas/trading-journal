@@ -15,6 +15,7 @@ from app.api.routes_exchanges import router as exchanges_router
 from app.api.routes_pnl import router as pnl_router
 from app.api.routes_export import router as export_router
 from app.api.routes_strategies import router as strategies_router
+from app.api.routes_screenshots import router as screenshots_router
 
 
 @asynccontextmanager
@@ -39,6 +40,7 @@ app.include_router(exchanges_router, prefix="/api")
 app.include_router(pnl_router, prefix="/api")
 app.include_router(export_router, prefix="/api")
 app.include_router(strategies_router, prefix="/api")
+app.include_router(screenshots_router, prefix="/api")
 
 # --- Static frontend ---
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"

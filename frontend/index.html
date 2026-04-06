@@ -127,6 +127,9 @@
                 <header class="page-header">
                     <h1>Trades</h1>
                     <div class="page-actions">
+                        <label class="export-checkbox" title="Download as ZIP with chart images">
+                            <input type="checkbox" id="export-screenshots"> Charts
+                        </label>
                         <select class="filter-select" id="export-format">
                             <option value="xlsx">XLSX</option>
                             <option value="csv">CSV</option>
@@ -171,12 +174,13 @@
                                 <th class="sortable" data-sort="total">Total</th>
                                 <th>Fee</th>
                                 <th>Strategy</th>
+                                <th>Charts</th>
                                 <th>Fills</th>
                             </tr>
                         </thead>
                         <tbody id="trades-tbody">
                             <tr class="empty-row">
-                                <td colspan="10">
+                                <td colspan="11">
                                     <div class="table-empty">No trades loaded. Connect an exchange and sync to see data here.</div>
                                 </td>
                             </tr>
@@ -445,6 +449,12 @@
                     </div>
                 </div>
             </section>
+
+            <!-- ==================== LIGHTBOX ==================== -->
+            <div class="lightbox" id="lightbox" style="display: none" onclick="closeLightbox()">
+                <img id="lightbox-img" src="" alt="Screenshot">
+                <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+            </div>
 
         </main>
     </div>

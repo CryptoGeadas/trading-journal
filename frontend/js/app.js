@@ -146,7 +146,7 @@ function renderTradesTable(trades) {
     if (!tbody) return;
 
     if (trades.length === 0) {
-        tbody.innerHTML = `<tr class="empty-row"><td colspan="10">
+        tbody.innerHTML = `<tr class="empty-row"><td colspan="11">
             <div class="table-empty">No trades found matching your filters.</div>
         </td></tr>`;
         return;
@@ -163,7 +163,7 @@ function renderTradesTable(trades) {
             : '<span style="color:var(--text-muted)">—</span>';
 
         return `
-        <tr data-id="${t.id}" class="${hasMultipleFills ? 'expandable' : ''}">
+        <tr data-id="${t.id}" data-order-id="${t.order_id || ''}" class="${hasMultipleFills ? 'expandable' : ''}">
             <td class="mono">${formatTime(t.timestamp)}</td>
             <td>${capitalise(t.exchange)}</td>
             <td><strong>${t.pair}</strong></td>
@@ -173,9 +173,20 @@ function renderTradesTable(trades) {
             <td class="mono">${formatCurrency(t.total)}</td>
             <td class="mono">${formatFee(t.fee, t.fee_currency)}</td>
             <td class="strategy-cell" onclick="event.stopPropagation(); openTagPopup('${t.id}', this, '${t.strategy || ''}')">${strategyCell}</td>
+            <td class="screenshots-cell" id="ss-${t.id}">
+                <div class="ss-row" id="ssr-${t.id}">
+                    <label class="ss-upload-btn" title="Add chart screenshot">
+                        <input type="file" accept="image/*" style="display:none" onchange="uploadScreenshot('${t.id}', this.files[0])">
+                        +
+                    </label>
+                </div>
+            </td>
             <td class="fills-col">${expandBtn}</td>
         </tr>`;
     }).join('');
+
+    // Load screenshots for visible trades
+    loadTradeScreenshots(trades);
 }
 
 async function toggleFills(orderId, toggleEl) {
@@ -202,6 +213,7 @@ async function toggleFills(orderId, toggleEl) {
                 <td class="mono">${formatPrice(f.price)}</td>
                 <td class="mono">${formatCurrency(f.total)}</td>
                 <td class="mono">${formatFee(f.fee, f.fee_currency)}</td>
+                <td></td>
                 <td></td>
                 <td></td>
             </tr>
@@ -612,6 +624,69 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// ---- Trade Screenshots ----
+async function loadTradeScreenshots(trades) {
+    for (const t of trades) {
+        try {
+            const screenshots = await API.tradeScreenshots(t.id);
+            const container = document.getElementById(`ssr-${t.id}`);
+            if (!container) continue;
+
+            // Build thumbnails
+            const thumbs = screenshots.map(s =>
+                `<div class="ss-thumb-wrap">
+                    <img class="ss-thumb" src="${s.url}" alt="${s.original_name}" onclick="openLightbox('${s.url}')" title="Click to enlarge">
+                    <button class="ss-delete" onclick="event.stopPropagation(); deleteScreenshot('${s.id}', '${t.id}')" title="Remove">✕</button>
+                </div>`
+            ).join('');
+
+            // Show upload button only if under limit (2)
+            const uploadBtn = screenshots.length < 2
+                ? `<label class="ss-upload-btn" title="Add chart screenshot">
+                       <input type="file" accept="image/*" style="display:none" onchange="uploadScreenshot('${t.id}', this.files[0])">
+                       +
+                   </label>`
+                : '';
+
+            container.innerHTML = thumbs + uploadBtn;
+        } catch (err) {
+            // Non-critical — thumbnails just won't load
+        }
+    }
+}
+
+async function uploadScreenshot(tradeId, file) {
+    if (!file) return;
+    try {
+        await API.uploadScreenshot(tradeId, file);
+        loadTrades();  // Refresh to show new thumbnail
+    } catch (err) {
+        alert('Upload failed: ' + err.message);
+    }
+}
+
+async function deleteScreenshot(screenshotId, tradeId) {
+    try {
+        await API.deleteScreenshot(screenshotId);
+        loadTrades();  // Refresh
+    } catch (err) {
+        alert('Delete failed: ' + err.message);
+    }
+}
+
+function openLightbox(url) {
+    const lb = document.getElementById('lightbox');
+    const img = document.getElementById('lightbox-img');
+    if (!lb || !img) return;
+    img.src = url;
+    lb.style.display = 'flex';
+}
+
+function closeLightbox() {
+    const lb = document.getElementById('lightbox');
+    if (lb) lb.style.display = 'none';
+}
+
 // ---- Global sync status ----
 async function updateGlobalSyncStatus() {
     try {
@@ -678,11 +753,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Export
     document.getElementById('btn-export')?.addEventListener('click', () => {
         const format = document.getElementById('export-format')?.value || 'xlsx';
+        const includeScreenshots = document.getElementById('export-screenshots')?.checked || false;
         const filters = getTradeFilters();
         const params = new URLSearchParams();
         params.set('format', format);
         params.set('order_by', tradesState.orderBy);
         params.set('order_dir', tradesState.orderDir);
+        if (includeScreenshots) params.set('include_screenshots', 'true');
         Object.entries(filters).forEach(([k, v]) => {
             if (v) params.set(k, v);
         });

@@ -1,8 +1,10 @@
-"""Export endpoints — CSV and XLSX download of filtered trades."""
+"""Export endpoints — CSV, XLSX, or ZIP (with screenshots) download."""
 
 import io
 import csv
+import zipfile
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Query
@@ -10,6 +12,8 @@ from fastapi.responses import StreamingResponse
 from app.database import get_db
 
 router = APIRouter()
+
+SCREENSHOTS_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "screenshots"
 
 EXPORT_COLUMNS = [
     ("timestamp", "Time"),
@@ -71,7 +75,9 @@ def _query_grouped_trades(
 
         query = f"""
             SELECT
+                MIN(id)              as id,
                 MIN(timestamp)       as timestamp,
+                exchange_id,
                 exchange,
                 pair,
                 side,
@@ -96,9 +102,43 @@ def _query_grouped_trades(
         db.close()
 
 
+def _get_screenshots_for_trades(rows: list[dict]) -> dict:
+    """
+    Get screenshots for each trade/order.
+    Returns: { trade_id_or_order_id: [ {filename, original_name, ...}, ... ] }
+    """
+    db = get_db()
+    try:
+        screenshots = {}
+        for row in rows:
+            order_id = row.get("order_id")
+            trade_id = row.get("id")
+
+            if order_id:
+                ss_rows = db.execute(
+                    "SELECT * FROM trade_screenshots WHERE order_id = ? ORDER BY uploaded_at",
+                    [order_id],
+                ).fetchall()
+                key = order_id
+            else:
+                ss_rows = db.execute(
+                    "SELECT * FROM trade_screenshots WHERE trade_id = ? ORDER BY uploaded_at",
+                    [trade_id],
+                ).fetchall()
+                key = trade_id
+
+            if ss_rows:
+                screenshots[key] = [dict(r) for r in ss_rows]
+
+        return screenshots
+    finally:
+        db.close()
+
+
 @router.get("/export")
 async def export_trades(
     format: str = Query("csv", pattern="^(csv|xlsx)$"),
+    include_screenshots: bool = Query(False),
     exchange: Optional[str] = None,
     pair: Optional[str] = None,
     side: Optional[str] = None,
@@ -108,62 +148,97 @@ async def export_trades(
     order_by: str = Query("timestamp", pattern="^(timestamp|pair|exchange|total)$"),
     order_dir: str = Query("desc", pattern="^(asc|desc)$"),
 ):
-    """Export filtered trades as CSV or XLSX."""
+    """Export filtered trades. Add include_screenshots=true for a ZIP with chart images."""
     rows = _query_grouped_trades(
         exchange, pair, side, strategy, date_from, date_to, order_by, order_dir
     )
 
-    # Generate filename with timestamp
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"trades_export_{ts}"
 
-    if format == "csv":
+    if include_screenshots:
+        return _export_zip(rows, filename, format)
+    elif format == "csv":
         return _export_csv(rows, filename)
     else:
         return _export_xlsx(rows, filename)
 
 
-def _export_csv(rows: list[dict], filename: str) -> StreamingResponse:
-    """Generate CSV file as streaming response."""
+def _export_zip(rows: list[dict], filename: str, format: str) -> StreamingResponse:
+    """Generate a ZIP containing the spreadsheet + a screenshots folder."""
+    screenshots = _get_screenshots_for_trades(rows)
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Generate the spreadsheet
+        if format == "csv":
+            sheet_data = _generate_csv_bytes(rows)
+            zf.writestr(f"{filename}.csv", sheet_data)
+        else:
+            sheet_data = _generate_xlsx_bytes(rows)
+            zf.writestr(f"{filename}.xlsx", sheet_data)
+
+        # Add screenshots
+        ss_count = 0
+        for row in rows:
+            key = row.get("order_id") or row.get("id")
+            if key not in screenshots:
+                continue
+
+            # Build a readable folder name: PAIR_DATE_SIDE
+            pair_clean = row.get("pair", "unknown").replace("/", "_")
+            ts_str = row.get("timestamp", "")[:10]  # Just the date part
+            side = row.get("side", "").lower()
+
+            for idx, ss in enumerate(screenshots[key], 1):
+                src_path = SCREENSHOTS_DIR / ss["filename"]
+                if not src_path.exists():
+                    continue
+
+                # Name: screenshots/RESOLV_USDC_2026-03-29_sell_1.png
+                ext = Path(ss["filename"]).suffix
+                archive_name = f"screenshots/{pair_clean}_{ts_str}_{side}_{idx}{ext}"
+                zf.write(str(src_path), archive_name)
+                ss_count += 1
+
+        print(f"[export] ZIP created: {len(rows)} trades, {ss_count} screenshots")
+
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        iter([zip_buffer.getvalue()]),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={filename}.zip"},
+    )
+
+
+def _generate_csv_bytes(rows: list[dict]) -> str:
+    """Generate CSV content as a string."""
     output = io.StringIO()
     writer = csv.writer(output)
-
-    # Header
     writer.writerow([col[1] for col in EXPORT_COLUMNS])
-
-    # Data
     for row in rows:
         writer.writerow([
             _format_value(row.get(col[0], ""), col[0])
             for col in EXPORT_COLUMNS
         ])
-
-    output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}.csv"},
-    )
+    return output.getvalue()
 
 
-def _export_xlsx(rows: list[dict], filename: str) -> StreamingResponse:
-    """Generate XLSX file as streaming response."""
+def _generate_xlsx_bytes(rows: list[dict]) -> bytes:
+    """Generate XLSX content as bytes."""
     from openpyxl import Workbook
-    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.styles import Font, Alignment, PatternFill
     from openpyxl.utils import get_column_letter
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Trades"
 
-    # Styles
-    header_font = Font(bold=True, size=11)
     header_fill = PatternFill(start_color="1C1D24", end_color="1C1D24", fill_type="solid")
     header_text = Font(bold=True, size=11, color="E8E9ED")
     number_fmt_2 = '0.00'
     number_fmt_8 = '0.00000000'
 
-    # Header row
     headers = [col[1] for col in EXPORT_COLUMNS]
     for col_idx, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col_idx, value=header)
@@ -171,13 +246,11 @@ def _export_xlsx(rows: list[dict], filename: str) -> StreamingResponse:
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center")
 
-    # Data rows
     for row_idx, row in enumerate(rows, 2):
         for col_idx, (key, _) in enumerate(EXPORT_COLUMNS, 1):
             value = row.get(key, "")
             cell = ws.cell(row=row_idx, column=col_idx, value=_format_value(value, key))
 
-            # Number formatting
             if key in ("total", "fee"):
                 try:
                     cell.value = round(float(value), 2)
@@ -197,14 +270,12 @@ def _export_xlsx(rows: list[dict], filename: str) -> StreamingResponse:
                 except (ValueError, TypeError):
                     pass
 
-            # Side colouring
             if key == "side" and value:
                 if value.lower() == "buy":
                     cell.font = Font(color="34D399")
                 elif value.lower() == "sell":
                     cell.font = Font(color="F87171")
 
-    # Auto-width columns
     for col_idx in range(1, len(headers) + 1):
         max_len = len(str(headers[col_idx - 1]))
         for row_idx in range(2, len(rows) + 2):
@@ -213,16 +284,26 @@ def _export_xlsx(rows: list[dict], filename: str) -> StreamingResponse:
                 max_len = max(max_len, len(str(val)))
         ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 3, 30)
 
-    # Freeze header row
     ws.freeze_panes = "A2"
 
-    # Write to bytes
     output = io.BytesIO()
     wb.save(output)
-    output.seek(0)
+    return output.getvalue()
 
+
+def _export_csv(rows: list[dict], filename: str) -> StreamingResponse:
+    """Generate CSV file as streaming response."""
     return StreamingResponse(
-        iter([output.getvalue()]),
+        iter([_generate_csv_bytes(rows)]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}.csv"},
+    )
+
+
+def _export_xlsx(rows: list[dict], filename: str) -> StreamingResponse:
+    """Generate XLSX file as streaming response."""
+    return StreamingResponse(
+        iter([_generate_xlsx_bytes(rows)]),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}.xlsx"},
     )
@@ -233,7 +314,6 @@ def _format_value(value, key: str):
     if value is None:
         return ""
     if key == "timestamp" and value:
-        # Clean up ISO format for readability
         return str(value).replace("T", " ").replace("+00:00", " UTC")
     if key == "side" and value:
         return value.upper()

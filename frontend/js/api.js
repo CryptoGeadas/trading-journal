@@ -73,6 +73,18 @@ const API = {
     createStrategy:   (body)      => API.post('/strategies', body),
     updateStrategy:   (id, body)  => API.patch(`/strategies/${id}`, body),
     deleteStrategy:   (id)        => API.delete(`/strategies/${id}`, { confirm: true }),
+    tradeScreenshots: (tradeId)   => API.get(`/trades/${tradeId}/screenshots`),
+    deleteScreenshot: (id)        => API.delete(`/screenshots/${id}`),
+    uploadScreenshot: async (tradeId, file) => {
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch(`/api/trades/${tradeId}/screenshots`, { method: 'POST', body: form });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: res.statusText }));
+            throw new Error(err.detail || 'Upload failed');
+        }
+        return res.json();
+    },
     pairs:            ()          => API.get('/pairs'),
     health:           ()          => fetch('/health').then(r => r.json()),
 };
