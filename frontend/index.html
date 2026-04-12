@@ -72,6 +72,12 @@
                     <p class="page-subtitle">Your trading performance at a glance</p>
                 </header>
 
+                <div class="alert alert-warning" id="stale-sync-warning" style="display: none">
+                    <span class="alert-icon">⚠</span>
+                    <span class="alert-text" id="stale-sync-text">Trade data may be outdated.</span>
+                    <button class="btn btn-ghost btn-sm" onclick="navigateTo('exchanges')">Check Exchanges</button>
+                </div>
+
                 <div class="stats-grid">
                     <div class="stat-card primary">
                         <span class="stat-label">Total PnL</span>
@@ -424,11 +430,16 @@
 
                 <div class="card" style="margin-top: 1.5rem">
                     <h3 class="card-title">Data Management</h3>
+                    <p class="form-note" style="margin-top: 0; margin-bottom: 0.75rem">
+                        Backup includes your database, screenshots, and extra_pairs.txt — everything needed to restore your journal.
+                    </p>
                     <div class="form-row">
-                        <button class="btn btn-secondary" disabled>Export Database Backup</button>
-                        <button class="btn btn-danger" disabled>Reset All Data</button>
+                        <button class="btn btn-secondary" onclick="downloadBackup()">Download Backup</button>
+                        <label class="btn btn-secondary" style="cursor: pointer">
+                            Restore Backup
+                            <input type="file" accept=".zip" style="display:none" onchange="restoreBackup(this.files[0])">
+                        </label>
                     </div>
-                    <p class="form-note">Backup and reset will be available in Phase 4.</p>
                 </div>
 
                 <div class="card" style="margin-top: 1.5rem">
@@ -458,6 +469,8 @@
 
         </main>
     </div>
+
+    <div class="toast-container" id="toast-container"></div>
 
     <script src="/static/js/api.js"></script>
     <script src="/static/js/app.js"></script>

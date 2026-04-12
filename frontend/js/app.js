@@ -59,8 +59,39 @@ async function loadOverview() {
         // Show/hide empty state
         const empty = document.getElementById('overview-empty');
         if (empty) empty.style.display = data.total_trades === 0 ? 'block' : 'none';
+
+        // Check for stale sync
+        checkStaleSyncWarning(data);
     } catch (err) {
         console.error('Failed to load overview:', err);
+    }
+}
+
+function checkStaleSyncWarning(overviewData) {
+    const warning = document.getElementById('stale-sync-warning');
+    const text = document.getElementById('stale-sync-text');
+    if (!warning || !text) return;
+
+    if (overviewData.connected_exchanges === 0) {
+        warning.style.display = 'none';
+        return;
+    }
+
+    if (!overviewData.last_sync) {
+        warning.style.display = 'flex';
+        text.textContent = 'Your exchanges have never been synced. Go to Exchanges and click Sync Now.';
+        return;
+    }
+
+    const lastSync = new Date(overviewData.last_sync);
+    const hoursAgo = (Date.now() - lastSync.getTime()) / (1000 * 60 * 60);
+
+    if (hoursAgo > 24) {
+        const daysAgo = Math.floor(hoursAgo / 24);
+        warning.style.display = 'flex';
+        text.textContent = `Last sync was ${daysAgo} day${daysAgo > 1 ? 's' : ''} ago. Your trade data may be outdated.`;
+    } else {
+        warning.style.display = 'none';
     }
 }
 
@@ -255,22 +286,38 @@ async function loadExchanges() {
             return;
         }
 
-        container.innerHTML = exchanges.map(e => `
-            <div class="exchange-card">
+        container.innerHTML = exchanges.map(e => {
+            let staleClass = '';
+            let staleTag = '';
+            if (e.last_sync_at) {
+                const hoursAgo = (Date.now() - new Date(e.last_sync_at).getTime()) / (1000 * 60 * 60);
+                if (hoursAgo > 24) {
+                    staleClass = ' exchange-card-stale';
+                    staleTag = `<span class="stale-tag">Stale — ${Math.floor(hoursAgo / 24)}d ago</span>`;
+                }
+            } else {
+                staleTag = '<span class="stale-tag">Never synced</span>';
+            }
+
+            const statusColour = e.last_sync_status === 'success' ? 'var(--green)'
+                : e.last_sync_status === 'error' ? 'var(--red)' : 'var(--text-muted)';
+
+            return `
+            <div class="exchange-card${staleClass}">
                 <div class="exchange-info">
-                    <h3>${e.label || capitalise(e.exchange)}</h3>
+                    <h3>${e.label || capitalise(e.exchange)} ${staleTag}</h3>
                     <div class="exchange-meta">
                         ${e.trade_count} trades · 
                         Last sync: ${e.last_sync_at ? formatTime(e.last_sync_at) : 'Never'} ·
-                        Status: ${e.last_sync_status || 'Not synced'}
+                        Status: <span style="color:${statusColour}; font-weight:600">${e.last_sync_status || 'Not synced'}</span>
                     </div>
                 </div>
                 <div class="exchange-actions">
                     <button class="btn btn-secondary btn-sm" onclick="syncExchange('${e.id}')">Sync Now</button>
                     <button class="btn btn-danger btn-sm" onclick="removeExchange('${e.id}', '${e.label || e.exchange}')">Remove</button>
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
 
         // Update sync log
         loadSyncLog();
@@ -308,10 +355,12 @@ async function loadSyncLog() {
 
 async function syncExchange(id) {
     try {
-        await API.syncExchange(id);
+        showToast('Syncing trades...', 'info', 2000);
+        const result = await API.syncExchange(id);
+        showToast(`Sync complete — ${result.trades_fetched} new trades`, 'success');
         loadExchanges();
     } catch (err) {
-        alert('Sync failed: ' + err.message);
+        showToast('Sync failed: ' + err.message, 'error');
     }
 }
 
@@ -321,7 +370,7 @@ async function removeExchange(id, name) {
         await API.removeExchange(id);
         loadExchanges();
     } catch (err) {
-        alert('Remove failed: ' + err.message);
+        showToast('Remove failed: ' + err.message, 'error');
     }
 }
 
@@ -489,7 +538,7 @@ async function saveStrategy() {
     const colour = activeSwatch ? activeSwatch.dataset.colour : '#6c9cfc';
 
     if (!name) {
-        alert('Please enter a strategy name.');
+        showToast('Please enter a strategy name.', 'warning');
         return;
     }
 
@@ -502,7 +551,7 @@ async function saveStrategy() {
         closeModal('modal-strategy');
         loadStrategies();
     } catch (err) {
-        alert('Failed to save strategy: ' + err.message);
+        showToast('Failed to save strategy: ' + err.message, 'error');
     }
 }
 
@@ -514,7 +563,7 @@ function confirmDeleteStrategy(id, name) {
             closeModal('modal-delete-strategy');
             loadStrategies();
         } catch (err) {
-            alert('Failed to delete: ' + err.message);
+            showToast('Failed to delete: ' + err.message, 'error');
         }
     };
     openModal('modal-delete-strategy');
@@ -531,7 +580,7 @@ async function exportStrategies() {
         a.click();
         URL.revokeObjectURL(url);
     } catch (err) {
-        alert('Export failed: ' + err.message);
+        showToast('Export failed: ' + err.message, 'error');
     }
 }
 
@@ -546,10 +595,10 @@ async function importStrategies() {
             const text = await file.text();
             const data = JSON.parse(text);
             const result = await API.post('/strategies-import', data);
-            alert(`Imported ${result.imported} strategies, skipped ${result.skipped} duplicates.`);
+            showToast(`Imported ${result.imported} strategies, skipped ${result.skipped} duplicates.`, 'success');
             loadStrategies();
         } catch (err) {
-            alert('Import failed: ' + err.message);
+            showToast('Import failed: ' + err.message, 'error');
         }
     };
     input.click();
@@ -614,7 +663,7 @@ async function tagTrade(tradeId, strategyName) {
         closeTagPopup();
         loadTrades();  // Refresh table
     } catch (err) {
-        alert('Failed to tag trade: ' + err.message);
+        showToast('Failed to tag trade: ' + err.message, 'error');
     }
 }
 
@@ -661,7 +710,7 @@ async function uploadScreenshot(tradeId, file) {
         await API.uploadScreenshot(tradeId, file);
         loadTrades();  // Refresh to show new thumbnail
     } catch (err) {
-        alert('Upload failed: ' + err.message);
+        showToast('Upload failed: ' + err.message, 'error');
     }
 }
 
@@ -670,7 +719,7 @@ async function deleteScreenshot(screenshotId, tradeId) {
         await API.deleteScreenshot(screenshotId);
         loadTrades();  // Refresh
     } catch (err) {
-        alert('Delete failed: ' + err.message);
+        showToast('Delete failed: ' + err.message, 'error');
     }
 }
 
@@ -685,6 +734,63 @@ function openLightbox(url) {
 function closeLightbox() {
     const lb = document.getElementById('lightbox');
     if (lb) lb.style.display = 'none';
+}
+
+// ---- Toast Notifications ----
+function showToast(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('toast-container');
+    if (!container) { alert(message); return; }
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <span class="toast-msg">${message}</span>
+        <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+    `;
+    container.appendChild(toast);
+
+    // Animate in
+    requestAnimationFrame(() => toast.classList.add('show'));
+
+    // Auto-remove
+    if (duration > 0) {
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    }
+}
+
+// ---- Backup & Restore ----
+async function downloadBackup() {
+    try {
+        showToast('Preparing backup...', 'info', 2000);
+        window.location.href = '/api/backup';
+    } catch (err) {
+        showToast('Backup failed: ' + err.message, 'error');
+    }
+}
+
+async function restoreBackup(file) {
+    if (!file) return;
+    if (!confirm('This will replace your current database and screenshots with the backup. Are you sure?')) return;
+
+    try {
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch('/api/restore', { method: 'POST', body: form });
+        const data = await res.json();
+
+        if (!res.ok) {
+            showToast('Restore failed: ' + (data.detail || 'Unknown error'), 'error');
+            return;
+        }
+
+        showToast(`Backup restored! ${data.screenshots_restored} screenshots recovered. Reloading...`, 'success', 3000);
+        setTimeout(() => window.location.reload(), 3000);
+    } catch (err) {
+        showToast('Restore failed: ' + err.message, 'error');
+    }
 }
 
 // ---- Global sync status ----
@@ -796,7 +902,7 @@ document.addEventListener('DOMContentLoaded', () => {
             label: document.getElementById('new-exchange-label')?.value || null,
         };
         if (!body.exchange || !body.api_key || !body.api_secret) {
-            alert('Please fill in exchange, API key, and secret.');
+            showToast('Please fill in exchange, API key, and secret.', 'warning');
             return;
         }
         try {
@@ -804,7 +910,7 @@ document.addEventListener('DOMContentLoaded', () => {
             closeModal('modal-add-exchange');
             loadExchanges();
         } catch (err) {
-            alert('Failed to add exchange: ' + err.message);
+            showToast('Failed to add exchange: ' + err.message, 'error');
         }
     });
 

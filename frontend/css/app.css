@@ -658,6 +658,21 @@ tr.expandable {
     align-items: center;
 }
 
+.exchange-card-stale {
+    border-color: rgba(251, 191, 36, 0.25);
+}
+
+.stale-tag {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+    background: var(--yellow-dim);
+    color: var(--yellow);
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}
+
 /* ---- Strategy Cards ---- */
 .strategies-grid {
     display: flex;
@@ -992,6 +1007,101 @@ tr.expandable {
 
 .tag-empty a:hover {
     text-decoration: underline;
+}
+
+/* ---- Alert Banners ---- */
+.alert {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    margin-bottom: 1.25rem;
+}
+
+.alert-warning {
+    background: var(--yellow-dim);
+    border: 1px solid rgba(251, 191, 36, 0.2);
+    color: var(--yellow);
+}
+
+.alert-icon {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.alert-text {
+    flex: 1;
+}
+
+/* ---- Toast Notifications ---- */
+.toast-container {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 400px;
+}
+
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    transform: translateX(20px);
+    transition: opacity 0.3s, transform 0.3s;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.toast-info {
+    border-left: 3px solid var(--accent);
+    color: var(--text-primary);
+}
+
+.toast-success {
+    border-left: 3px solid var(--green);
+    color: var(--green);
+}
+
+.toast-error {
+    border-left: 3px solid var(--red);
+    color: var(--red);
+}
+
+.toast-warning {
+    border-left: 3px solid var(--yellow);
+    color: var(--yellow);
+}
+
+.toast-msg {
+    flex: 1;
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 0 0.25rem;
+}
+
+.toast-close:hover {
+    color: var(--text-primary);
 }
 
 /* ---- Responsive ---- */
