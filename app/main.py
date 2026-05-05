@@ -17,6 +17,9 @@ from app.api.routes_export import router as export_router
 from app.api.routes_strategies import router as strategies_router
 from app.api.routes_screenshots import router as screenshots_router
 from app.api.routes_backup import router as backup_router
+from app.api.routes_funding import router as funding_router
+from app.api.routes_patterns import router as patterns_router
+from app.api.routes_notes import router as notes_router
 
 
 @asynccontextmanager
@@ -43,6 +46,9 @@ app.include_router(export_router, prefix="/api")
 app.include_router(strategies_router, prefix="/api")
 app.include_router(screenshots_router, prefix="/api")
 app.include_router(backup_router, prefix="/api")
+app.include_router(funding_router, prefix="/api")
+app.include_router(patterns_router, prefix="/api")
+app.include_router(notes_router, prefix="/api")
 
 # --- Static frontend ---
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"

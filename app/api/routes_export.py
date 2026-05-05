@@ -19,6 +19,7 @@ EXPORT_COLUMNS = [
     ("timestamp", "Time"),
     ("exchange", "Exchange"),
     ("pair", "Pair"),
+    ("trade_type", "Type"),
     ("side", "Side"),
     ("quantity", "Quantity"),
     ("price", "Avg Price"),
@@ -36,6 +37,7 @@ def _query_grouped_trades(
     exchange: Optional[str],
     pair: Optional[str],
     side: Optional[str],
+    trade_type: Optional[str],
     strategy: Optional[str],
     date_from: Optional[str],
     date_to: Optional[str],
@@ -57,6 +59,9 @@ def _query_grouped_trades(
         if side:
             conditions.append("side = ?")
             params.append(side)
+        if trade_type:
+            conditions.append("trade_type = ?")
+            params.append(trade_type)
         if strategy:
             if strategy == "__untagged__":
                 conditions.append("strategy IS NULL")
@@ -80,6 +85,7 @@ def _query_grouped_trades(
                 exchange_id,
                 exchange,
                 pair,
+                MIN(trade_type)      as trade_type,
                 side,
                 SUM(quantity)        as quantity,
                 CASE WHEN SUM(quantity) > 0
@@ -103,10 +109,7 @@ def _query_grouped_trades(
 
 
 def _get_screenshots_for_trades(rows: list[dict]) -> dict:
-    """
-    Get screenshots for each trade/order.
-    Returns: { trade_id_or_order_id: [ {filename, original_name, ...}, ... ] }
-    """
+    """Get screenshots for each trade/order."""
     db = get_db()
     try:
         screenshots = {}
@@ -142,6 +145,7 @@ async def export_trades(
     exchange: Optional[str] = None,
     pair: Optional[str] = None,
     side: Optional[str] = None,
+    trade_type: Optional[str] = None,
     strategy: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -150,7 +154,7 @@ async def export_trades(
 ):
     """Export filtered trades. Add include_screenshots=true for a ZIP with chart images."""
     rows = _query_grouped_trades(
-        exchange, pair, side, strategy, date_from, date_to, order_by, order_dir
+        exchange, pair, side, trade_type, strategy, date_from, date_to, order_by, order_dir
     )
 
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -170,7 +174,6 @@ def _export_zip(rows: list[dict], filename: str, format: str) -> StreamingRespon
 
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        # Generate the spreadsheet
         if format == "csv":
             sheet_data = _generate_csv_bytes(rows)
             zf.writestr(f"{filename}.csv", sheet_data)
@@ -178,16 +181,14 @@ def _export_zip(rows: list[dict], filename: str, format: str) -> StreamingRespon
             sheet_data = _generate_xlsx_bytes(rows)
             zf.writestr(f"{filename}.xlsx", sheet_data)
 
-        # Add screenshots
         ss_count = 0
         for row in rows:
             key = row.get("order_id") or row.get("id")
             if key not in screenshots:
                 continue
 
-            # Build a readable folder name: PAIR_DATE_SIDE
             pair_clean = row.get("pair", "unknown").replace("/", "_")
-            ts_str = row.get("timestamp", "")[:10]  # Just the date part
+            ts_str = row.get("timestamp", "")[:10]
             side = row.get("side", "").lower()
 
             for idx, ss in enumerate(screenshots[key], 1):
@@ -195,7 +196,6 @@ def _export_zip(rows: list[dict], filename: str, format: str) -> StreamingRespon
                 if not src_path.exists():
                     continue
 
-                # Name: screenshots/RESOLV_USDC_2026-03-29_sell_1.png
                 ext = Path(ss["filename"]).suffix
                 archive_name = f"screenshots/{pair_clean}_{ts_str}_{side}_{idx}{ext}"
                 zf.write(str(src_path), archive_name)
@@ -292,7 +292,6 @@ def _generate_xlsx_bytes(rows: list[dict]) -> bytes:
 
 
 def _export_csv(rows: list[dict], filename: str) -> StreamingResponse:
-    """Generate CSV file as streaming response."""
     return StreamingResponse(
         iter([_generate_csv_bytes(rows)]),
         media_type="text/csv",
@@ -301,7 +300,6 @@ def _export_csv(rows: list[dict], filename: str) -> StreamingResponse:
 
 
 def _export_xlsx(rows: list[dict], filename: str) -> StreamingResponse:
-    """Generate XLSX file as streaming response."""
     return StreamingResponse(
         iter([_generate_xlsx_bytes(rows)]),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -318,5 +316,7 @@ def _format_value(value, key: str):
     if key == "side" and value:
         return value.upper()
     if key == "exchange" and value:
+        return value.capitalize()
+    if key == "trade_type" and value:
         return value.capitalize()
     return value

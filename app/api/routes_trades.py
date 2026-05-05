@@ -1,14 +1,32 @@
-"""Trades endpoints — grouped orders with fill expansion."""
+"""Trades endpoints — grouped orders with fill expansion + manual entry."""
 
+import uuid
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
+from pydantic import BaseModel
 from app.database import get_db
 from app.models import TradeOut, TradeUpdate, TradesPage, OrderOut, OrdersPage
 
 router = APIRouter()
 
 
-def _build_where(exchange, pair, side, strategy, date_from, date_to):
+class ManualTradeCreate(BaseModel):
+    exchange: str = "manual"
+    pair: str
+    side: str  # "buy" or "sell"
+    quantity: float
+    price: float
+    fee: float = 0.0
+    fee_currency: str = "USDT"
+    trade_type: str = "spot"  # "spot" or "futures"
+    timestamp: Optional[str] = None  # ISO format, defaults to now
+    strategy: Optional[str] = None
+    notes: Optional[str] = None
+    order_id: Optional[str] = None  # optional exchange order ID
+
+
+def _build_where(exchange, pair, side, strategy, date_from, date_to, trade_type=None):
     """Build WHERE clause and params from filter values."""
     conditions = []
     params = []
@@ -22,6 +40,9 @@ def _build_where(exchange, pair, side, strategy, date_from, date_to):
     if side:
         conditions.append("side = ?")
         params.append(side)
+    if trade_type:
+        conditions.append("trade_type = ?")
+        params.append(trade_type)
     if strategy:
         if strategy == "__untagged__":
             conditions.append("strategy IS NULL")
@@ -46,6 +67,7 @@ async def list_trades(
     exchange: Optional[str] = None,
     pair: Optional[str] = None,
     side: Optional[str] = None,
+    trade_type: Optional[str] = None,
     strategy: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -61,13 +83,10 @@ async def list_trades(
     """
     db = get_db()
     try:
-        where, params = _build_where(exchange, pair, side, strategy, date_from, date_to)
+        where, params = _build_where(exchange, pair, side, strategy, date_from, date_to, trade_type)
 
-        # Grouped query: aggregate fills into orders
-        # COALESCE(order_id, id) ensures fills without an order_id are treated individually
         group_key = "COALESCE(order_id, id)"
 
-        # Count distinct orders
         count_sql = f"""
             SELECT COUNT(*) FROM (
                 SELECT {group_key} as gk
@@ -77,7 +96,6 @@ async def list_trades(
         """
         total = db.execute(count_sql, params).fetchone()[0]
 
-        # Fetch grouped page
         offset = (page - 1) * page_size
         query = f"""
             SELECT
@@ -151,14 +169,12 @@ async def get_fills(order_id: str):
     """Get individual fills for a given order_id."""
     db = get_db()
     try:
-        # Try matching by order_id first, then by trade id (for single-fill orders)
         rows = db.execute(
             "SELECT * FROM trades WHERE order_id = ? ORDER BY timestamp ASC",
             [order_id],
         ).fetchall()
 
         if not rows:
-            # Might be a single fill with no order_id — try by trade id
             rows = db.execute(
                 "SELECT * FROM trades WHERE id = ?",
                 [order_id],
@@ -207,7 +223,6 @@ async def update_trade(trade_id: str, update: TradeUpdate):
             set_clause = ", ".join(f"{k} = ?" for k in updates)
             values = list(updates.values())
 
-            # If this fill has an order_id, update ALL fills in the same order
             if existing["order_id"]:
                 db.execute(
                     f"UPDATE trades SET {set_clause} WHERE order_id = ?",
@@ -222,6 +237,70 @@ async def update_trade(trade_id: str, update: TradeUpdate):
 
         row = db.execute("SELECT * FROM trades WHERE id = ?", [trade_id]).fetchone()
         return TradeOut(**dict(row))
+    finally:
+        db.close()
+
+
+@router.post("/trades", status_code=201)
+async def create_manual_trade(body: ManualTradeCreate):
+    """Manually add a trade (for OTC, unlisted exchanges, or corrections)."""
+    if body.side not in ("buy", "sell"):
+        raise HTTPException(status_code=400, detail="Side must be 'buy' or 'sell'.")
+    if body.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be positive.")
+    if body.price <= 0:
+        raise HTTPException(status_code=400, detail="Price must be positive.")
+    if "/" not in body.pair:
+        raise HTTPException(status_code=400, detail="Pair must be in BASE/QUOTE format (e.g. BTC/USDT).")
+
+    parts = body.pair.upper().split("/")
+    base = parts[0]
+    quote = parts[1] if len(parts) > 1 else ""
+
+    trade_id = str(uuid.uuid4())
+    external_id = f"manual_{trade_id[:8]}"
+    ts = body.timestamp or datetime.now(timezone.utc).isoformat()
+    total = body.quantity * body.price
+
+    db = get_db()
+    try:
+        # Ensure a "manual" exchange record exists for manual trades
+        exchange_id = f"manual_{body.exchange.lower().replace(' ', '_')}"
+        existing_ex = db.execute(
+            "SELECT id FROM exchanges WHERE id = ?", [exchange_id]
+        ).fetchone()
+        if not existing_ex:
+            db.execute(
+                """INSERT INTO exchanges (id, exchange, label, api_key_enc, api_secret_enc, is_read_only)
+                   VALUES (?, ?, ?, '', '', 1)""",
+                [exchange_id, body.exchange.lower(), f"{body.exchange} (Manual)"],
+            )
+
+        db.execute(
+            """INSERT INTO trades
+               (id, exchange_id, exchange, external_id, order_id, timestamp,
+                pair, base_currency, quote_currency, side,
+                quantity, price, total, fee, fee_currency,
+                trade_type, strategy, notes, synced_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+            [
+                trade_id, exchange_id, body.exchange.lower(), external_id,
+                body.order_id or None, ts,
+                body.pair.upper(), base, quote, body.side,
+                body.quantity, body.price, total,
+                body.fee, body.fee_currency,
+                body.trade_type, body.strategy or None, body.notes or None,
+            ],
+        )
+        db.commit()
+
+        return {
+            "status": "created",
+            "id": trade_id,
+            "pair": body.pair.upper(),
+            "side": body.side,
+            "total": round(total, 2),
+        }
     finally:
         db.close()
 

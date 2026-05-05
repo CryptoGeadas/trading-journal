@@ -42,6 +42,12 @@
                     </a>
                 </li>
                 <li>
+                    <a href="#" class="nav-link" data-page="notes">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                        <span>Notes</span>
+                    </a>
+                </li>
+                <li>
                     <a href="#" class="nav-link" data-page="exchanges">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
                         <span>Exchanges</span>
@@ -126,6 +132,12 @@
                     <p>Connect an exchange to start tracking your trades.</p>
                     <button class="btn btn-primary" onclick="navigateTo('exchanges')">Add Exchange</button>
                 </div>
+
+                <!-- Pattern Insights -->
+                <div id="patterns-section" style="display: none; margin-top: 1.5rem">
+                    <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; letter-spacing: -0.01em">Pattern Insights</h3>
+                    <div class="patterns-grid" id="patterns-container"></div>
+                </div>
             </section>
 
             <!-- ==================== TRADES ==================== -->
@@ -133,6 +145,7 @@
                 <header class="page-header">
                     <h1>Trades</h1>
                     <div class="page-actions">
+                        <button class="btn btn-primary btn-sm" id="btn-add-trade">+ Add Trade</button>
                         <label class="export-checkbox" title="Download as ZIP with chart images">
                             <input type="checkbox" id="export-screenshots"> Charts
                         </label>
@@ -151,6 +164,11 @@
                     </select>
                     <select class="filter-select" id="filter-pair">
                         <option value="">All Pairs</option>
+                    </select>
+                    <select class="filter-select" id="filter-trade-type">
+                        <option value="">Spot & Futures</option>
+                        <option value="spot">Spot Only</option>
+                        <option value="futures">Futures Only</option>
                     </select>
                     <select class="filter-select" id="filter-side">
                         <option value="">Buy & Sell</option>
@@ -210,10 +228,6 @@
                 <header class="page-header">
                     <h1>PnL Breakdown</h1>
                     <div class="page-actions">
-                        <select class="filter-select" id="pnl-method">
-                            <option value="fifo">FIFO</option>
-                            <option value="avg_cost">Avg Cost</option>
-                        </select>
                         <select class="filter-select" id="pnl-group-by">
                             <option value="pair">By Pair</option>
                             <option value="exchange">By Exchange</option>
@@ -223,10 +237,67 @@
                         </select>
                     </div>
                 </header>
+
+                <div class="stats-grid">
+                    <div class="stat-card primary">
+                        <span class="stat-label">Realised PnL</span>
+                        <span class="stat-value" id="pnl-total">$0.00</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Win Rate</span>
+                        <span class="stat-value" id="pnl-win-rate">—</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Profit Factor</span>
+                        <span class="stat-value" id="pnl-profit-factor">—</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Closed Trades</span>
+                        <span class="stat-value" id="pnl-trade-count">0</span>
+                    </div>
+                </div>
+
+                <div class="stats-grid secondary">
+                    <div class="stat-card small">
+                        <span class="stat-label">Avg Win</span>
+                        <span class="stat-value positive" id="pnl-avg-win">$0.00</span>
+                    </div>
+                    <div class="stat-card small">
+                        <span class="stat-label">Avg Loss</span>
+                        <span class="stat-value negative" id="pnl-avg-loss">$0.00</span>
+                    </div>
+                    <div class="stat-card small">
+                        <span class="stat-label">Best Pair</span>
+                        <span class="stat-value" id="pnl-best-pair">—</span>
+                    </div>
+                    <div class="stat-card small">
+                        <span class="stat-label">Worst Pair</span>
+                        <span class="stat-value" id="pnl-worst-pair">—</span>
+                    </div>
+                </div>
+
+                <!-- PnL breakdown table -->
                 <div class="card">
-                    <div class="phase-notice">
-                        <span class="phase-badge">Phase 3</span>
-                        PnL calculation engine will be implemented in Phase 3. The endpoint is scaffolded and ready.
+                    <h3 class="card-title" id="pnl-table-title">PnL by Pair</h3>
+                    <div class="table-container">
+                        <table class="data-table" id="pnl-table">
+                            <thead>
+                                <tr>
+                                    <th>Group</th>
+                                    <th>Trades</th>
+                                    <th>PnL</th>
+                                    <th>Fees</th>
+                                    <th>Win Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pnl-tbody">
+                                <tr class="empty-row">
+                                    <td colspan="5">
+                                        <div class="table-empty">No PnL data. Complete a buy+sell round-trip to see results.</div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </section>
@@ -314,6 +385,24 @@
                 </div>
             </section>
 
+            <!-- ==================== NOTES ==================== -->
+            <section class="page" id="page-notes">
+                <header class="page-header">
+                    <h1>Notebook</h1>
+                    <div class="page-actions">
+                        <button class="btn btn-primary" id="btn-add-note">+ New Note</button>
+                    </div>
+                </header>
+
+                <div class="notes-grid" id="notes-list">
+                    <div class="empty-state">
+                        <div class="empty-icon">📝</div>
+                        <h3>No notes yet</h3>
+                        <p>Create a note to jot down ideas, research, or observations (max 4).</p>
+                    </div>
+                </div>
+            </section>
+
             <!-- ==================== EXCHANGES ==================== -->
             <section class="page" id="page-exchanges">
                 <header class="page-header">
@@ -345,7 +434,6 @@
                                 <select class="filter-select" id="new-exchange-type">
                                     <option value="">Select exchange...</option>
                                     <option value="binance">Binance</option>
-                                    <option value="bybit">Bybit</option>
                                     <option value="gateio">Gate.io</option>
                                 </select>
                             </div>
@@ -366,7 +454,7 @@
                                 <input type="password" class="filter-input" id="new-exchange-passphrase" placeholder="Exchange passphrase">
                             </div>
                             <div class="notice warning">
-                                <strong>Important:</strong> Only use API keys with <strong>read-only</strong> permissions. Trading, withdrawal, and transfer permissions must be disabled. The app will verify this before saving.
+                                <strong>Important:</strong> Create API keys with <strong>read-only</strong> permissions. Withdrawal and transfer permissions must be disabled — the app will reject keys that have them. For Binance futures, "Enable Futures" is required for reading trade history (the app never places orders).
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -460,6 +548,109 @@
                     </div>
                 </div>
             </section>
+
+            <!-- ==================== MANUAL TRADE MODAL ==================== -->
+            <div class="modal-backdrop" id="modal-add-trade" style="display: none">
+                <div class="modal modal-wide">
+                    <div class="modal-header">
+                        <h2>Add Manual Trade</h2>
+                        <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-add-trade')">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1">
+                                <label>Exchange</label>
+                                <input type="text" class="filter-input" id="mt-exchange" value="manual" placeholder="e.g. manual, OTC, Kraken">
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label>Trade Type</label>
+                                <select class="filter-select" id="mt-trade-type">
+                                    <option value="spot">Spot</option>
+                                    <option value="futures">Futures</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1">
+                                <label>Pair</label>
+                                <input type="text" class="filter-input" id="mt-pair" placeholder="e.g. BTC/USDT">
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label>Side</label>
+                                <select class="filter-select" id="mt-side">
+                                    <option value="buy">Buy</option>
+                                    <option value="sell">Sell</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1">
+                                <label>Quantity</label>
+                                <input type="number" class="filter-input" id="mt-quantity" step="any" placeholder="0.00">
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label>Price</label>
+                                <input type="number" class="filter-input" id="mt-price" step="any" placeholder="0.00">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1">
+                                <label>Fee</label>
+                                <input type="number" class="filter-input" id="mt-fee" step="any" value="0" placeholder="0.00">
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label>Fee Currency</label>
+                                <input type="text" class="filter-input" id="mt-fee-currency" value="USDT" placeholder="USDT">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1">
+                                <label>Date/Time <span class="label-optional">(leave blank for now)</span></label>
+                                <input type="datetime-local" class="filter-input" id="mt-timestamp">
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label>Order ID <span class="label-optional">(optional)</span></label>
+                                <input type="text" class="filter-input" id="mt-order-id" placeholder="Exchange order ID">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Strategy <span class="label-optional">(optional)</span></label>
+                            <select class="filter-select" id="mt-strategy">
+                                <option value="">No strategy</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Notes <span class="label-optional">(optional)</span></label>
+                            <textarea class="filter-input" id="mt-notes" rows="3" placeholder="Trade rationale, context..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-ghost" onclick="closeModal('modal-add-trade')">Cancel</button>
+                        <button class="btn btn-primary" id="btn-submit-trade">Add Trade</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== TRADE DETAIL PANEL ==================== -->
+            <div class="modal-backdrop" id="modal-trade-detail" style="display: none">
+                <div class="modal modal-wide">
+                    <div class="modal-header">
+                        <h2 id="trade-detail-title">Trade Detail</h2>
+                        <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-trade-detail')">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="trade-detail-info" id="trade-detail-info"></div>
+                        <div class="form-group" style="margin-top: 1rem">
+                            <label>Notes</label>
+                            <textarea class="filter-input" id="trade-detail-notes" rows="5" placeholder="Add notes about this trade..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-ghost" onclick="closeModal('modal-trade-detail')">Cancel</button>
+                        <button class="btn btn-primary" id="btn-save-trade-notes">Save Notes</button>
+                    </div>
+                </div>
+            </div>
 
             <!-- ==================== LIGHTBOX ==================== -->
             <div class="lightbox" id="lightbox" style="display: none" onclick="closeLightbox()">

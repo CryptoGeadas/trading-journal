@@ -85,6 +85,14 @@ const API = {
         }
         return res.json();
     },
+    fundingFees:      (params = {}) => API.get('/funding-fees', params),
+    fundingSummary:   (params = {}) => API.get('/funding-fees/summary', params),
+    patterns:         ()            => API.get('/patterns'),
+    notes:            ()            => API.get('/notes'),
+    createNote:       (body)        => API.post('/notes', body),
+    updateNote:       (id, body)    => API.patch(`/notes/${id}`, body),
+    deleteNote:       (id)          => API.delete(`/notes/${id}`),
+    createTrade:      (body)        => API.post('/trades', body),
     pairs:            ()          => API.get('/pairs'),
     health:           ()          => fetch('/health').then(r => r.json()),
 };

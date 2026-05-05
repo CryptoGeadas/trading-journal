@@ -28,10 +28,11 @@ function loadPageData(page) {
     switch (page) {
         case 'overview':    loadOverview(); break;
         case 'trades':      loadTrades();   break;
+        case 'pnl':         loadPnl();      break;
         case 'strategies':  loadStrategies(); break;
+        case 'notes':       loadNotes();    break;
         case 'exchanges':   loadExchanges(); break;
         case 'settings':    loadSettings();  break;
-        // pnl: Phase 3
     }
 }
 
@@ -62,6 +63,9 @@ async function loadOverview() {
 
         // Check for stale sync
         checkStaleSyncWarning(data);
+
+        // Load patterns
+        loadPatterns();
     } catch (err) {
         console.error('Failed to load overview:', err);
     }
@@ -95,6 +99,54 @@ function checkStaleSyncWarning(overviewData) {
     }
 }
 
+// ---- PnL ----
+async function loadPnl() {
+    const groupBy = document.getElementById('pnl-group-by')?.value || 'pair';
+    try {
+        const data = await API.pnl({ group_by: groupBy });
+
+        setText('pnl-total', formatCurrency(data.total_pnl));
+        setText('pnl-win-rate', data.trade_count > 0 ? `${data.win_rate}%` : '—');
+        setText('pnl-profit-factor', data.profit_factor > 0 ? data.profit_factor : '—');
+        setText('pnl-trade-count', data.trade_count);
+        setText('pnl-avg-win', formatCurrency(data.avg_win));
+        setText('pnl-avg-loss', formatCurrency(data.avg_loss));
+        setText('pnl-best-pair', data.best_pair || '—');
+        setText('pnl-worst-pair', data.worst_pair || '—');
+
+        colourPnl('pnl-total', data.total_pnl);
+
+        // Table title
+        const titles = { pair: 'PnL by Pair', exchange: 'PnL by Exchange', strategy: 'PnL by Strategy', month: 'PnL by Month', week: 'PnL by Week' };
+        setText('pnl-table-title', titles[groupBy] || 'PnL Breakdown');
+
+        // Render breakdown table
+        const tbody = document.getElementById('pnl-tbody');
+        if (!tbody) return;
+
+        if (!data.breakdown || data.breakdown.length === 0) {
+            tbody.innerHTML = `<tr class="empty-row"><td colspan="5">
+                <div class="table-empty">No PnL data. Complete a buy+sell round-trip to see results.</div>
+            </td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = data.breakdown.map(b => {
+            const pnlClass = b.total_pnl >= 0 ? 'positive' : 'negative';
+            return `
+            <tr>
+                <td><strong>${b.group}</strong></td>
+                <td class="mono">${b.trade_count}</td>
+                <td class="mono ${pnlClass}">${formatCurrency(b.total_pnl)}</td>
+                <td class="mono">${formatCurrency(b.total_fees)}</td>
+                <td class="mono">${b.win_rate}%</td>
+            </tr>`;
+        }).join('');
+    } catch (err) {
+        console.error('Failed to load PnL:', err);
+    }
+}
+
 // ---- Trades ----
 async function loadTrades() {
     try {
@@ -120,12 +172,13 @@ async function loadTrades() {
 
 function getTradeFilters() {
     return {
-        exchange:  document.getElementById('filter-exchange')?.value || '',
-        pair:      document.getElementById('filter-pair')?.value || '',
-        side:      document.getElementById('filter-side')?.value || '',
-        strategy:  document.getElementById('filter-strategy')?.value || '',
-        date_from: document.getElementById('filter-date-from')?.value || '',
-        date_to:   document.getElementById('filter-date-to')?.value || '',
+        exchange:   document.getElementById('filter-exchange')?.value || '',
+        pair:       document.getElementById('filter-pair')?.value || '',
+        trade_type: document.getElementById('filter-trade-type')?.value || '',
+        side:       document.getElementById('filter-side')?.value || '',
+        strategy:   document.getElementById('filter-strategy')?.value || '',
+        date_from:  document.getElementById('filter-date-from')?.value || '',
+        date_to:    document.getElementById('filter-date-to')?.value || '',
     };
 }
 
@@ -193,18 +246,22 @@ function renderTradesTable(trades) {
             ? `<span class="strategy-badge" style="background:${getStrategyColour(t.strategy)}22; color:${getStrategyColour(t.strategy)}; border: 1px solid ${getStrategyColour(t.strategy)}44">${t.strategy}</span>`
             : '<span style="color:var(--text-muted)">—</span>';
 
+        const typeBadge = t.trade_type === 'futures'
+            ? ' <span class="type-badge futures">PERP</span>'
+            : '';
+
         return `
-        <tr data-id="${t.id}" data-order-id="${t.order_id || ''}" class="${hasMultipleFills ? 'expandable' : ''}">
+        <tr data-id="${t.id}" data-order-id="${t.order_id || ''}" class="${hasMultipleFills ? 'expandable' : ''}" onclick="openTradeDetailFromRow(this)" data-trade='${JSON.stringify(t).replace(/'/g, "&#39;")}'>
             <td class="mono">${formatTime(t.timestamp)}</td>
             <td>${capitalise(t.exchange)}</td>
-            <td><strong>${t.pair}</strong></td>
+            <td><strong>${t.pair}</strong>${typeBadge}</td>
             <td class="side-${t.side}">${t.side.toUpperCase()}</td>
             <td class="mono">${formatQty(t.quantity)}</td>
             <td class="mono">${formatPrice(t.price)}</td>
             <td class="mono">${formatCurrency(t.total)}</td>
             <td class="mono">${formatFee(t.fee, t.fee_currency)}</td>
             <td class="strategy-cell" onclick="event.stopPropagation(); openTagPopup('${t.id}', this, '${t.strategy || ''}')">${strategyCell}</td>
-            <td class="screenshots-cell" id="ss-${t.id}">
+            <td class="screenshots-cell" id="ss-${t.id}" onclick="event.stopPropagation()">
                 <div class="ss-row" id="ssr-${t.id}">
                     <label class="ss-upload-btn" title="Add chart screenshot">
                         <input type="file" accept="image/*" style="display:none" onchange="uploadScreenshot('${t.id}', this.files[0])">
@@ -212,7 +269,7 @@ function renderTradesTable(trades) {
                     </label>
                 </div>
             </td>
-            <td class="fills-col">${expandBtn}</td>
+            <td class="fills-col" onclick="event.stopPropagation()">${expandBtn}</td>
         </tr>`;
     }).join('');
 
@@ -736,6 +793,252 @@ function closeLightbox() {
     if (lb) lb.style.display = 'none';
 }
 
+// ---- Patterns ----
+async function loadPatterns() {
+    try {
+        const data = await API.patterns();
+        const section = document.getElementById('patterns-section');
+        const container = document.getElementById('patterns-container');
+        if (!section || !container) return;
+
+        if (!data.patterns || data.patterns.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+
+        section.style.display = 'block';
+        container.innerHTML = data.patterns.map(p => {
+            const icon = p.type === 'streaks' ? '🔥' : p.type === 'time_of_day' ? '🕐' : '⏱';
+            let detailHtml = '';
+
+            if (p.type === 'streaks' && p.data) {
+                detailHtml = `
+                    <div class="pattern-stats">
+                        <span>Best win streak: <strong>${p.data.max_win_streak}</strong></span>
+                        <span>Worst loss streak: <strong>${p.data.max_loss_streak}</strong></span>
+                        <span>Current: <strong>${p.data.current_streak} ${p.data.current_streak_type}${p.data.current_streak > 1 ? 's' : ''}</strong></span>
+                    </div>`;
+            } else if (p.type === 'time_of_day' && p.data) {
+                const best = p.data.best_hour;
+                const worst = p.data.worst_hour;
+                detailHtml = `
+                    <div class="pattern-stats">
+                        ${best ? `<span>Best hour: <strong>${best.hour}:00 UTC</strong> (${formatCurrency(best.pnl)})</span>` : ''}
+                        ${worst ? `<span>Worst hour: <strong>${worst.hour}:00 UTC</strong> (${formatCurrency(worst.pnl)})</span>` : ''}
+                    </div>`;
+            } else if (p.type === 'hold_time' && p.data) {
+                detailHtml = `
+                    <div class="pattern-stats">
+                        <span>Average: <strong>${p.data.avg_formatted}</strong></span>
+                        <span>Shortest: <strong>${p.data.shortest.pair}</strong> (${p.data.shortest.duration})</span>
+                        <span>Longest: <strong>${p.data.longest.pair}</strong> (${p.data.longest.duration})</span>
+                    </div>`;
+            }
+
+            return `
+            <div class="pattern-card">
+                <div class="pattern-header">
+                    <span class="pattern-icon">${icon}</span>
+                    <strong>${p.title}</strong>
+                </div>
+                <p class="pattern-insight">${p.insight}</p>
+                ${detailHtml}
+            </div>`;
+        }).join('');
+    } catch (err) {
+        // Non-critical
+    }
+}
+
+// ---- Notes Page ----
+async function loadNotes() {
+    try {
+        const notes = await API.notes();
+        const container = document.getElementById('notes-list');
+        if (!container) return;
+
+        if (notes.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📝</div>
+                    <h3>No notes yet</h3>
+                    <p>Create a note to jot down ideas, research, or observations (max 4).</p>
+                </div>`;
+            return;
+        }
+
+        container.innerHTML = notes.map(n => `
+            <div class="note-card" id="note-${n.id}">
+                <div class="note-card-header">
+                    <input class="note-title-input" value="${escapeHtml(n.title)}" onchange="updateNote('${n.id}', {title: this.value})">
+                    <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteNote('${n.id}')">Delete</button>
+                </div>
+                <textarea class="note-content" rows="10" placeholder="Write your notes here..." onblur="updateNote('${n.id}', {content: this.value})">${escapeHtml(n.content)}</textarea>
+                <div class="note-meta">Last updated: ${formatTime(n.updated_at)}</div>
+            </div>
+        `).join('');
+    } catch (err) {
+        console.error('Failed to load notes:', err);
+    }
+}
+
+async function createNote() {
+    try {
+        await API.createNote({ title: 'New Note', content: '' });
+        loadNotes();
+    } catch (err) {
+        showToast('Failed to create note: ' + err.message, 'error');
+    }
+}
+
+async function updateNote(id, updates) {
+    try {
+        await API.updateNote(id, updates);
+        // Don't reload — just update the meta silently
+    } catch (err) {
+        showToast('Failed to save note: ' + err.message, 'error');
+    }
+}
+
+async function deleteNote(id) {
+    if (!confirm('Delete this note?')) return;
+    try {
+        await API.deleteNote(id);
+        loadNotes();
+    } catch (err) {
+        showToast('Failed to delete note: ' + err.message, 'error');
+    }
+}
+
+// ---- Manual Trade Entry ----
+function openAddTradeModal() {
+    // Reset form
+    ['mt-exchange', 'mt-pair', 'mt-quantity', 'mt-price', 'mt-order-id', 'mt-notes'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    document.getElementById('mt-exchange').value = 'manual';
+    document.getElementById('mt-fee').value = '0';
+    document.getElementById('mt-fee-currency').value = 'USDT';
+    document.getElementById('mt-trade-type').value = 'spot';
+    document.getElementById('mt-side').value = 'buy';
+    document.getElementById('mt-timestamp').value = '';
+
+    // Populate strategy dropdown
+    const stratSelect = document.getElementById('mt-strategy');
+    if (stratSelect) {
+        while (stratSelect.options.length > 1) stratSelect.remove(1);
+        _strategyCache.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.name;
+            opt.textContent = s.name;
+            stratSelect.appendChild(opt);
+        });
+    }
+
+    openModal('modal-add-trade');
+}
+
+async function submitManualTrade() {
+    const pair = document.getElementById('mt-pair')?.value?.trim().toUpperCase();
+    const qty = parseFloat(document.getElementById('mt-quantity')?.value);
+    const price = parseFloat(document.getElementById('mt-price')?.value);
+
+    if (!pair || !pair.includes('/')) {
+        showToast('Enter a valid pair (e.g. BTC/USDT)', 'warning');
+        return;
+    }
+    if (isNaN(qty) || qty <= 0) {
+        showToast('Enter a valid quantity', 'warning');
+        return;
+    }
+    if (isNaN(price) || price <= 0) {
+        showToast('Enter a valid price', 'warning');
+        return;
+    }
+
+    const tsInput = document.getElementById('mt-timestamp')?.value;
+
+    try {
+        const body = {
+            exchange: document.getElementById('mt-exchange')?.value || 'manual',
+            pair: pair,
+            side: document.getElementById('mt-side')?.value || 'buy',
+            quantity: qty,
+            price: price,
+            fee: parseFloat(document.getElementById('mt-fee')?.value) || 0,
+            fee_currency: document.getElementById('mt-fee-currency')?.value || 'USDT',
+            trade_type: document.getElementById('mt-trade-type')?.value || 'spot',
+            timestamp: tsInput ? new Date(tsInput).toISOString() : null,
+            strategy: document.getElementById('mt-strategy')?.value || null,
+            notes: document.getElementById('mt-notes')?.value || null,
+            order_id: document.getElementById('mt-order-id')?.value || null,
+        };
+
+        await API.createTrade(body);
+        closeModal('modal-add-trade');
+        showToast(`Trade added: ${body.side.toUpperCase()} ${body.pair}`, 'success');
+        loadTrades();
+    } catch (err) {
+        showToast('Failed to add trade: ' + err.message, 'error');
+    }
+}
+
+// ---- Trade Detail Panel ----
+let _currentDetailTradeId = null;
+
+function openTradeDetail(tradeId, tradeData) {
+    _currentDetailTradeId = tradeId;
+
+    const title = document.getElementById('trade-detail-title');
+    const info = document.getElementById('trade-detail-info');
+    const notes = document.getElementById('trade-detail-notes');
+
+    if (title) title.textContent = `${tradeData.pair} — ${tradeData.side.toUpperCase()}`;
+
+    if (info) {
+        const typeBadge = tradeData.trade_type === 'futures' ? '<span class="type-badge futures">PERP</span>' : '';
+        info.innerHTML = `
+            <div class="detail-grid">
+                <div class="detail-item"><span class="detail-label">Time</span><span class="detail-value mono">${formatTime(tradeData.timestamp)}</span></div>
+                <div class="detail-item"><span class="detail-label">Exchange</span><span class="detail-value">${capitalise(tradeData.exchange)}</span></div>
+                <div class="detail-item"><span class="detail-label">Pair</span><span class="detail-value"><strong>${tradeData.pair}</strong> ${typeBadge}</span></div>
+                <div class="detail-item"><span class="detail-label">Side</span><span class="detail-value side-${tradeData.side}">${tradeData.side.toUpperCase()}</span></div>
+                <div class="detail-item"><span class="detail-label">Quantity</span><span class="detail-value mono">${formatQty(tradeData.quantity)}</span></div>
+                <div class="detail-item"><span class="detail-label">Price</span><span class="detail-value mono">${formatPrice(tradeData.price)}</span></div>
+                <div class="detail-item"><span class="detail-label">Total</span><span class="detail-value mono">${formatCurrency(tradeData.total)}</span></div>
+                <div class="detail-item"><span class="detail-label">Fee</span><span class="detail-value mono">${formatFee(tradeData.fee, tradeData.fee_currency)}</span></div>
+            </div>`;
+    }
+
+    if (notes) notes.value = tradeData.notes || '';
+
+    openModal('modal-trade-detail');
+}
+
+function openTradeDetailFromRow(row) {
+    try {
+        const data = JSON.parse(row.dataset.trade);
+        openTradeDetail(data.id, data);
+    } catch (err) {
+        console.error('Failed to open trade detail:', err);
+    }
+}
+
+async function saveTradeNotes() {
+    if (!_currentDetailTradeId) return;
+    const notes = document.getElementById('trade-detail-notes')?.value || '';
+
+    try {
+        await API.updateTrade(_currentDetailTradeId, { notes: notes });
+        closeModal('modal-trade-detail');
+        showToast('Notes saved', 'success');
+        loadTrades();
+    } catch (err) {
+        showToast('Failed to save notes: ' + err.message, 'error');
+    }
+}
+
 // ---- Toast Notifications ----
 function showToast(message, type = 'info', duration = 4000) {
     const container = document.getElementById('toast-container');
@@ -834,7 +1137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Trade filters
-    ['filter-exchange', 'filter-pair', 'filter-side', 'filter-strategy',
+    ['filter-exchange', 'filter-pair', 'filter-trade-type', 'filter-side', 'filter-strategy',
      'filter-date-from', 'filter-date-to'].forEach(id => {
         document.getElementById(id)?.addEventListener('change', () => {
             tradesState.page = 1;
@@ -844,7 +1147,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Clear filters
     document.getElementById('btn-clear-filters')?.addEventListener('click', () => {
-        ['filter-exchange', 'filter-pair', 'filter-side', 'filter-strategy'].forEach(id => {
+        ['filter-exchange', 'filter-pair', 'filter-trade-type', 'filter-side', 'filter-strategy'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
@@ -869,7 +1172,6 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.entries(filters).forEach(([k, v]) => {
             if (v) params.set(k, v);
         });
-        // Trigger download via direct navigation
         window.location.href = `/api/export?${params.toString()}`;
     });
 
@@ -920,6 +1222,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target === backdrop) backdrop.style.display = 'none';
         });
     });
+
+    // PnL: group-by selector
+    document.getElementById('pnl-group-by')?.addEventListener('change', () => loadPnl());
+
+    // Manual trade
+    document.getElementById('btn-add-trade')?.addEventListener('click', openAddTradeModal);
+    document.getElementById('btn-submit-trade')?.addEventListener('click', submitManualTrade);
+
+    // Trade detail notes
+    document.getElementById('btn-save-trade-notes')?.addEventListener('click', saveTradeNotes);
+
+    // Notes page
+    document.getElementById('btn-add-note')?.addEventListener('click', createNote);
 
     // Strategy: add button
     document.getElementById('btn-add-strategy')?.addEventListener('click', () => openStrategyModal());

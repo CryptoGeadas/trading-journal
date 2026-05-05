@@ -796,6 +796,28 @@ tr.expandable {
     white-space: nowrap;
 }
 
+/* ---- Trade Type Badge ---- */
+.type-badge {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+    margin-left: 0.35rem;
+    vertical-align: middle;
+}
+
+.type-badge.futures {
+    background: rgba(251, 191, 36, 0.12);
+    color: var(--yellow);
+    border: 1px solid rgba(251, 191, 36, 0.25);
+}
+
+/* ---- PnL Table ---- */
+.data-table .positive { color: var(--green); }
+.data-table .negative { color: var(--red); }
+
 .strategy-cell {
     cursor: pointer;
     position: relative;
@@ -1102,6 +1124,141 @@ tr.expandable {
 
 .toast-close:hover {
     color: var(--text-primary);
+}
+
+/* ---- Pattern Cards (Overview) ---- */
+.patterns-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.pattern-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+}
+
+.pattern-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.92rem;
+}
+
+.pattern-icon {
+    font-size: 1.1rem;
+}
+
+.pattern-insight {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin: 0 0 0.5rem;
+}
+
+.pattern-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.pattern-stats strong {
+    color: var(--text-primary);
+}
+
+/* ---- Notes Page ---- */
+.notes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1rem;
+}
+
+.note-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.note-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.note-title-input {
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    font-weight: 600;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid transparent;
+    color: var(--text-primary);
+    padding: 0.2rem 0;
+    outline: none;
+    flex: 1;
+    margin-right: 0.5rem;
+}
+
+.note-title-input:focus {
+    border-bottom-color: var(--accent);
+}
+
+.note-content {
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    padding: 0.75rem;
+    resize: vertical;
+    min-height: 150px;
+    outline: none;
+    width: 100%;
+}
+
+.note-content:focus {
+    border-color: var(--accent);
+}
+
+.note-meta {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 0.5rem;
+}
+
+/* ---- Trade Detail Panel ---- */
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.6rem 1.5rem;
+}
+
+.detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.detail-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.detail-value {
+    font-size: 0.85rem;
 }
 
 /* ---- Responsive ---- */

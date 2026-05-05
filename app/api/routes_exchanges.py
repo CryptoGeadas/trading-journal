@@ -47,15 +47,16 @@ def list_exchanges():
 def add_exchange(body: ExchangeCreate):
     """
     Add a new exchange connection.
-    1. Creates a ccxt client with the provided credentials.
-    2. Validates the key is read-only.
-    3. Encrypts and stores the credentials.
-    """
-    # Validate exchange name
-    if body.exchange not in ("binance", "bybit", "gateio"):
-        raise HTTPException(status_code=400, detail="Unsupported exchange. Use: binance, bybit, gateio")
 
-    # Create ccxt client and validate permissions
+    Permission model:
+    - Hard-blocks keys with Withdrawal or Transfer permissions (never needed).
+    - Allows Futures/Spot trading permissions with a warning (Binance requires
+      these for reading futures trade history; the app contains no order
+      placement code).
+    """
+    if body.exchange not in ("binance", "gateio"):
+        raise HTTPException(status_code=400, detail="Unsupported exchange. Use: binance, gateio")
+
     try:
         client = create_client(
             exchange=body.exchange,
@@ -66,23 +67,21 @@ def add_exchange(body: ExchangeCreate):
     except ExchangeError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Validate read-only permissions
+    # Validate permissions
     validation = validate_read_only(client)
 
-    if validation["error"] and not validation["is_read_only"]:
-        raise HTTPException(
-            status_code=403,
-            detail=validation["error"],
-        )
+    # Hard block: keys with dangerous permissions (withdrawals, transfers)
+    if validation.get("error"):
+        raise HTTPException(status_code=403, detail=validation["error"])
 
-    if validation["error"]:
-        # Non-fatal warning (e.g. couldn't fully verify Gate.io)
-        print(f"[exchange] Warning during validation: {validation['error']}")
+    # Log warnings (trading permissions that are allowed but noted)
+    warnings = validation.get("warnings", [])
+    for w in warnings:
+        print(f"[exchange] Warning: {w}")
 
     # Generate a unique ID for this connection
     exchange_id = f"{body.exchange}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
-    # Check for duplicate
     db = get_db()
     try:
         existing = db.execute(
@@ -110,7 +109,7 @@ def add_exchange(body: ExchangeCreate):
                 encrypt(body.api_secret),
                 encrypt(body.passphrase) if body.passphrase else None,
                 json.dumps(validation["permissions"]),
-                1 if validation["is_read_only"] else 0,
+                1,  # Always stored as "accepted" — dangerous perms are hard-blocked above
             ],
         )
         db.commit()
@@ -118,8 +117,8 @@ def add_exchange(body: ExchangeCreate):
         return {
             "status": "connected",
             "exchange_id": exchange_id,
-            "is_read_only": validation["is_read_only"],
             "permissions": validation["permissions"],
+            "warnings": warnings,
         }
     finally:
         db.close()
@@ -138,7 +137,6 @@ def trigger_sync(exchange_id: str):
     finally:
         db.close()
 
-    # Run sync (this is synchronous — blocks until complete)
     result = sync_exchange(exchange_id)
 
     if result["status"] == "error":

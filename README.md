@@ -1,9 +1,8 @@
 # Trading Journal
 
-A self-hosted crypto trading journal that connects to your exchange accounts (read-only), syncs your trade history, and provides analytics through a browser dashboard.
+A self-hosted crypto trading journal that connects to your exchange accounts, syncs your trade history, and provides analytics through a browser dashboard.
 
-**Supported exchanges:** Binance · Gate.io  
-**Note:** Bybit currently requires third-party app approval for API key creation, which blocks direct use.
+**Supported exchanges:** Binance (spot + USDT/USDC-margined futures) · Gate.io (spot)
 
 ---
 
@@ -34,39 +33,115 @@ docker-compose up --build
 
 ## Features
 
-### Exchange Connectivity (Phase 1)
-- Connect to Binance and Gate.io with **read-only API keys**
-- Permission validation — rejects keys with trading/withdrawal access
-- API credentials encrypted at rest (Fernet encryption)
+### Exchange Connectivity
+- Connect to **Binance** (spot + futures) and **Gate.io** (spot) with API keys
+- **Permission validation**: hard-blocks keys with withdrawal or transfer permissions. Allows futures/spot trading permissions with a warning (Binance requires these for reading futures trade history; the app contains no order-placement code)
+- API credentials encrypted at rest (Fernet symmetric encryption)
 - Automatic sync every 6 hours + manual "Sync Now" button
-- Smart pair discovery: finds trades via balance detection + `extra_pairs.txt` for fully-sold positions
-- Gate.io and Binance-specific sync handling (per-symbol fetching, time filter quirks)
+- **Smart pair discovery**: finds trades via balance detection + `extra_pairs.txt` for fully-sold positions
+- Exchange-specific sync handling (Gate.io per-symbol fetching, Binance spot + futures separate clients)
+- **Binance futures**: syncs USDT-margined and USDC-margined perpetual trades + funding fee history
 - Sync log with status tracking and error messages
-- 2026 trades only (configurable in sync engine)
+- Stale sync warnings when data is >24 hours old
 
-### Trades Table (Phase 1–2)
+### Trades Table
 - Full trade table with sorting (time, pair, exchange, total) and pagination
-- **Order grouping**: multiple fills from the same order shown as one row with combined totals
-- Expandable fills: click the fill count to see individual execution details
-- Filter bar: by exchange, pair, side, strategy, and date range
-- **Chart screenshots**: upload up to 2 chart images per trade, shown as thumbnails with click-to-enlarge lightbox
+- **Order grouping**: multiple fills from the same order shown as one row with combined totals and weighted average price
+- **Expandable fills**: click the fill count to see individual execution details
+- **Trade type filter**: filter between Spot, Futures, or both. Futures trades show a yellow "PERP" badge
+- Filter bar: by exchange, pair, trade type, side, strategy, and date range
+- **Chart screenshots**: upload up to 2 chart images per trade (10 MB max), shown as thumbnails with click-to-enlarge lightbox
+- **Trade notes**: click any trade row to open a detail panel with an editable notes field
+- **Manual trade entry**: add trades manually for OTC deals, unlisted exchanges, or corrections. Includes all fields: exchange, pair, side, quantity, price, fee, timestamp, strategy, notes, and optional exchange order ID
 
-### Export (Phase 2)
+### PnL & Analytics (Phase 3)
+- **FIFO PnL engine**: calculates realised profit/loss by matching buys against sells using First-In-First-Out cost basis
+- **PnL breakdown**: group by pair, exchange, strategy, month, or week
+- **Performance stats**: win rate, profit factor, average win/loss, best/worst pair
+- **Overview dashboard**: real-time stats including total PnL, monthly/weekly PnL, fees, win rate
+- **Pattern detection**: win/loss streaks, time-of-day performance analysis, average hold time per trade
+
+### Export
 - Download filtered trades as **CSV** or **XLSX**
-- Exports respect all active filters (date range, exchange, pair, side, strategy)
+- **ZIP export with screenshots**: check "Charts" before exporting to get a ZIP containing the spreadsheet plus a `screenshots/` folder with chart images named by pair and date
+- Exports include a "Type" column (Spot/Futures) and respect all active filters
 - Grouped orders exported as single rows with combined quantities and weighted average prices
 
-### Strategy System (Phase 2)
-- **Strategies page**: create, edit, and delete trading strategies
-- Each strategy has: name, colour, short description, and a playbook (rules, entry/exit criteria, notes)
-- 9 colour options for visual differentiation
+### Strategy System
+- **Strategies page**: create, edit, and delete trading strategies with dedicated sidebar tab
+- Each strategy has: name, colour (9 options), short description, and a **playbook** (rules, entry/exit criteria, notes)
 - **Trade tagging**: click the Strategy column on any trade to assign a strategy from a dropdown
 - Strategy-coloured badges in the trades table
 - **Import/Export**: download all strategies as JSON backup, restore from file (protects against database resets)
 
-### Dashboard (Phase 0)
-- Overview screen with stat cards (total trades, fees, exchange count)
-- PnL stats are placeholder — full calculation coming in Phase 3
+### Notebook
+- **Notes page**: dedicated sidebar tab for general notes, research, and observations (max 4 notes)
+- Each note has an editable title and a large text area
+- Auto-saves on blur — no save button needed for content
+- Separate from trade-specific notes
+
+### Hardening
+- **Backup/restore**: one-click download of a ZIP containing database, screenshots, and extra_pairs.txt. Restore from any backup file
+- **Toast notifications**: all confirmations and errors shown as slide-in toasts (no browser alert popups)
+- **Stale data warnings**: overview page and exchange cards flag when sync is overdue (>24 hours)
+
+---
+
+## API Key Setup
+
+### Binance
+
+1. Go to **API Management** in your Binance account settings
+2. Create a new API key
+3. Permissions to **enable**:
+   - ☑ Enable Reading (required)
+   - ☑ Enable Futures (required for futures trade history — this also grants trade capability, but the app never places orders)
+4. Permissions to **disable**:
+   - ☐ Enable Spot & Margin Trading (not needed for spot read access)
+   - ☐ Enable Withdrawals (hard-blocked by the app)
+   - ☐ Enable Internal Transfer (hard-blocked by the app)
+5. Copy the API Key and Secret
+
+### Gate.io
+
+1. Go to **API Key Management** in your Gate.io account settings
+2. Create a new **API v4 Key**
+3. Enable **Spot Trade** with **Read Only** selected
+4. Leave all other permissions off
+5. Copy the API Key and Secret
+
+---
+
+## Security
+
+### Permission Model
+
+The app uses a two-layer security model:
+
+1. **Code-level protection** (primary): The codebase contains **no functions** that can place, modify, or cancel orders. Even if an API key has trading permissions, the app physically cannot use them.
+
+2. **Permission validation** (secondary): When connecting an exchange, the app checks the API key's permissions:
+   - **Hard-blocked**: Withdrawal and Transfer permissions are rejected outright — these are never needed for a trading journal
+   - **Allowed with warning**: Futures and Spot trading permissions are accepted because Binance requires them for reading futures trade history. A warning is logged noting the key has this capability
+
+### Data Safety
+
+- **All data stays local** — SQLite file + screenshot images on your machine
+- **API keys encrypted at rest** — Fernet encryption, key stored locally in `data/.encryption_key`
+- **Never committed to Git** — the `.gitignore` excludes `data/journal.db`, `data/.encryption_key`, and `data/screenshots/`
+- **Strategy backup** — export/import as JSON to protect against database resets
+- **Extra pairs file** — `data/extra_pairs.txt` survives database resets (add fully-sold pairs here)
+- **Full backup/restore** — download everything as a ZIP from the Settings page
+
+### GitHub Safety
+
+The `.gitignore` file prevents sensitive data from being committed:
+- `data/journal.db` (contains encrypted API keys and trade data)
+- `data/.encryption_key` (the encryption key — if this leaks, API keys can be decrypted)
+- `data/screenshots/` (personal chart images)
+- `.env` (environment variables)
+
+**If you previously committed without a proper .gitignore**, you should rotate your API keys on the exchanges and delete the old keys.
 
 ---
 
@@ -77,32 +152,37 @@ trading-journal/
 ├── app/
 │   ├── main.py               # FastAPI entry point + route registration
 │   ├── config.py             # Environment settings
-│   ├── database.py           # SQLite + versioned migrations (v1–v4)
+│   ├── database.py           # SQLite + versioned migrations (v1–v6)
 │   ├── models.py             # Pydantic request/response schemas
 │   ├── encryption.py         # API key encryption (Fernet)
 │   ├── scheduler.py          # APScheduler for periodic sync
 │   ├── exchanges/
 │   │   ├── connector.py      # ccxt wrapper + permission validation
-│   │   └── sync.py           # Trade sync engine with pair discovery
+│   │   └── sync.py           # Trade sync engine (spot + futures + funding)
 │   └── api/
-│       ├── routes_overview.py
-│       ├── routes_trades.py   # Grouped orders, fill expansion, tagging
-│       ├── routes_exchanges.py
-│       ├── routes_pnl.py      # Stub — Phase 3
-│       ├── routes_export.py   # CSV/XLSX export
+│       ├── routes_overview.py  # Dashboard stats with real PnL
+│       ├── routes_trades.py    # Grouped orders, fills, tagging, manual entry
+│       ├── routes_exchanges.py # Connect, sync, remove exchanges
+│       ├── routes_pnl.py       # FIFO PnL engine with grouping
+│       ├── routes_export.py    # CSV/XLSX/ZIP export
 │       ├── routes_strategies.py # Strategy CRUD + import/export
-│       └── routes_screenshots.py # Upload/serve/delete trade screenshots
+│       ├── routes_screenshots.py # Upload/serve/delete trade screenshots
+│       ├── routes_patterns.py  # Streak, time-of-day, hold time analysis
+│       ├── routes_funding.py   # Funding fee history
+│       ├── routes_notes.py     # General notebook (max 4 notes)
+│       └── routes_backup.py    # Full backup/restore as ZIP
 ├── frontend/
-│   ├── index.html            # Single-page dashboard
+│   ├── index.html            # Single-page dashboard (7 screens)
 │   ├── css/app.css           # Dark terminal theme
 │   └── js/
 │       ├── api.js            # API client
 │       └── app.js            # Navigation, rendering, interactions
 ├── data/
-│   ├── journal.db            # SQLite database (auto-created)
-│   ├── .encryption_key       # Fernet key (auto-generated)
+│   ├── journal.db            # SQLite database (auto-created, NEVER commit)
+│   ├── .encryption_key       # Fernet key (auto-generated, NEVER commit)
 │   ├── extra_pairs.txt       # Additional pairs for sync discovery
-│   └── screenshots/          # Uploaded chart images
+│   └── screenshots/          # Uploaded chart images (NEVER commit)
+├── .gitignore                # Protects sensitive files from Git
 ├── docker-compose.yml
 ├── Dockerfile
 ├── pyproject.toml
@@ -113,7 +193,7 @@ trading-journal/
 
 ## Database Migrations
 
-The app uses versioned migrations that run automatically on startup:
+Migrations run automatically on startup:
 
 | Version | What it adds |
 |---------|-------------|
@@ -121,35 +201,13 @@ The app uses versioned migrations that run automatically on startup:
 | v2 | order_id column on trades (fill grouping) |
 | v3 | strategies table |
 | v4 | trade_screenshots table |
+| v5 | funding_fees table + trade_type index |
+| v6 | notes table |
 
-You never need to run migrations manually. If you delete `journal.db`, the app recreates everything from scratch.
+If you delete `journal.db`, the app recreates everything from scratch.
 
 ---
 
 ## API Documentation
 
 When the server is running, visit **http://localhost:8000/docs** for the auto-generated Swagger UI listing all endpoints.
-
----
-
-## Roadmap
-
-| Phase | Status | Description |
-|-------|--------|-------------|
-| Phase 0 — Skeleton | ✅ Done | Project structure, empty dashboard, API scaffolding |
-| Phase 1 — Exchange Connectivity | ✅ Done | Binance + Gate.io sync, permission validation, encryption |
-| Phase 2 — Trades & Features | ✅ Done | Export, strategy system, order grouping, screenshots |
-| Phase 3 — PnL & Analytics | 🔲 Next | PnL calculations (FIFO/avg cost), win rate, performance stats |
-| Phase 4 — Hardening | 🔲 | Error handling, mobile responsive, backup/restore |
-| Future — AI Layer | 🔲 | Optional conversational interface over the existing API |
-
----
-
-## Data Safety
-
-- **All data stays local** — SQLite file + screenshot images on your machine
-- **API keys encrypted at rest** — never stored in plaintext, never logged
-- **Read-only enforcement** — the app validates API key permissions and rejects keys with trading access
-- **No trading capability** — the codebase has no functions that can place, modify, or cancel orders
-- **Strategy backup** — export/import as JSON to protect against database resets
-- **Extra pairs file** — `data/extra_pairs.txt` survives database resets (add fully-sold pairs here)
