@@ -133,6 +133,12 @@
                     <button class="btn btn-primary" onclick="navigateTo('exchanges')">Add Exchange</button>
                 </div>
 
+                <!-- Equity Curve -->
+                <div id="equity-curve-card" style="display: none; margin-top: 1.5rem">
+                    <h3 class="card-title">Equity Curve</h3>
+                    <div id="equity-chart" style="height: 300px;"></div>
+                </div>
+
                 <!-- Pattern Insights -->
                 <div id="patterns-section" style="display: none; margin-top: 1.5rem">
                     <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; letter-spacing: -0.01em">Pattern Insights</h3>
@@ -232,6 +238,7 @@
                             <option value="pair">By Pair</option>
                             <option value="exchange">By Exchange</option>
                             <option value="strategy">By Strategy</option>
+                            <option value="emotion_tag">By Emotion</option>
                             <option value="month">By Month</option>
                             <option value="week">By Week</option>
                         </select>
@@ -435,6 +442,7 @@
                                     <option value="">Select exchange...</option>
                                     <option value="binance">Binance</option>
                                     <option value="gateio">Gate.io</option>
+                                    <option value="kraken">Kraken</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -452,6 +460,10 @@
                             <div class="form-group" id="passphrase-group" style="display: none">
                                 <label>Passphrase</label>
                                 <input type="password" class="filter-input" id="new-exchange-passphrase" placeholder="Exchange passphrase">
+                            </div>
+                            <div class="form-group">
+                                <label>Sync Start Date <span class="label-optional">(default: January 1 of current year)</span></label>
+                                <input type="date" class="filter-input" id="new-exchange-start-date">
                             </div>
                             <div class="notice warning">
                                 <strong>Important:</strong> Create API keys with <strong>read-only</strong> permissions. Withdrawal and transfer permissions must be disabled — the app will reject keys that have them. For Binance futures, "Enable Futures" is required for reading trade history (the app never places orders).
@@ -640,6 +652,24 @@
                     </div>
                     <div class="modal-body">
                         <div class="trade-detail-info" id="trade-detail-info"></div>
+                        <div class="form-row" style="margin-top: 1rem; display: flex; gap: 1rem;">
+                            <div class="form-group" style="flex: 1;">
+                                <label>Emotion Tag</label>
+                                <select class="filter-select" id="trade-detail-emotion">
+                                    <option value="">No emotion tag</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>Trade Rating</label>
+                                <div class="rating-selector" id="trade-detail-rating">
+                                    <span class="rating-star" data-value="1">&#9733;</span>
+                                    <span class="rating-star" data-value="2">&#9733;</span>
+                                    <span class="rating-star" data-value="3">&#9733;</span>
+                                    <span class="rating-star" data-value="4">&#9733;</span>
+                                    <span class="rating-star" data-value="5">&#9733;</span>
+                                </div>
+                            </div>
+                        </div>
                         <div class="form-group" style="margin-top: 1rem">
                             <label>Notes</label>
                             <textarea class="filter-input" id="trade-detail-notes" rows="5" placeholder="Add notes about this trade..."></textarea>
@@ -647,7 +677,7 @@
                     </div>
                     <div class="modal-footer">
                         <button class="btn btn-ghost" onclick="closeModal('modal-trade-detail')">Cancel</button>
-                        <button class="btn btn-primary" id="btn-save-trade-notes">Save Notes</button>
+                        <button class="btn btn-primary" id="btn-save-trade-notes">Save</button>
                     </div>
                 </div>
             </div>
@@ -663,6 +693,7 @@
 
     <div class="toast-container" id="toast-container"></div>
 
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/app.js"></script>
 </body>

@@ -3,9 +3,10 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from app.config import SYNC_INTERVAL_HOURS
+from app.config import SYNC_INTERVAL_HOURS, BACKUP_RETENTION_COUNT
 from app.database import get_db
 from app.exchanges.sync import sync_exchange
+from app.services.backup import write_auto_backup
 
 _scheduler = None
 
@@ -25,8 +26,15 @@ def start_scheduler():
         name=f"Sync all exchanges every {SYNC_INTERVAL_HOURS}h",
         replace_existing=True,
     )
+    _scheduler.add_job(
+        _run_auto_backup,
+        trigger=IntervalTrigger(hours=24),
+        id="auto_backup",
+        name="Daily auto-backup",
+        replace_existing=True,
+    )
     _scheduler.start()
-    print(f"[scheduler] Started — syncing every {SYNC_INTERVAL_HOURS} hours")
+    print(f"[scheduler] Started — syncing every {SYNC_INTERVAL_HOURS}h, auto-backup every 24h")
 
 
 def stop_scheduler():
@@ -36,6 +44,14 @@ def stop_scheduler():
         _scheduler.shutdown(wait=False)
         _scheduler = None
         print("[scheduler] Stopped")
+
+
+def _run_auto_backup():
+    """Create a daily backup and prune old ones."""
+    try:
+        write_auto_backup(retention_count=BACKUP_RETENTION_COUNT)
+    except Exception as e:
+        print(f"[scheduler] Auto-backup failed: {e}")
 
 
 def _sync_all_exchanges():

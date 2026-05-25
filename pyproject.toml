@@ -14,5 +14,8 @@ dependencies = [
     "cryptography>=42.0",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
 [project.scripts]
 journal = "app.main:app"

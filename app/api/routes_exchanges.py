@@ -35,6 +35,7 @@ def list_exchanges():
                 last_sync_at=r["last_sync_at"],
                 last_sync_status=r["last_sync_status"],
                 trade_count=r["trade_count"],
+                sync_start_date=r["sync_start_date"],
                 created_at=r["created_at"],
             )
             for r in rows
@@ -54,8 +55,8 @@ def add_exchange(body: ExchangeCreate):
       these for reading futures trade history; the app contains no order
       placement code).
     """
-    if body.exchange not in ("binance", "gateio"):
-        raise HTTPException(status_code=400, detail="Unsupported exchange. Use: binance, gateio")
+    if body.exchange not in ("binance", "gateio", "kraken"):
+        raise HTTPException(status_code=400, detail="Unsupported exchange. Use: binance, gateio, kraken")
 
     try:
         client = create_client(
@@ -99,8 +100,8 @@ def add_exchange(body: ExchangeCreate):
         db.execute(
             """INSERT INTO exchanges
                (id, exchange, label, api_key_enc, api_secret_enc, passphrase_enc,
-                permissions, is_read_only, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+                permissions, is_read_only, sync_start_date, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
             [
                 exchange_id,
                 body.exchange,
@@ -110,6 +111,7 @@ def add_exchange(body: ExchangeCreate):
                 encrypt(body.passphrase) if body.passphrase else None,
                 json.dumps(validation["permissions"]),
                 1,  # Always stored as "accepted" — dangerous perms are hard-blocked above
+                body.sync_start_date,
             ],
         )
         db.commit()
@@ -164,6 +166,7 @@ def remove_exchange(exchange_id: str, confirm: bool = False):
         if not existing:
             raise HTTPException(status_code=404, detail="Exchange not found")
 
+        db.execute("DELETE FROM tracked_pairs WHERE exchange_id = ?", [exchange_id])
         db.execute("DELETE FROM exchanges WHERE id = ?", [exchange_id])
         db.commit()
         return {"status": "removed", "exchange_id": exchange_id}

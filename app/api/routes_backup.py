@@ -4,17 +4,13 @@ import io
 import zipfile
 import shutil
 from pathlib import Path
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from app.database import DB_PATH, init_db
+from app.services.backup import create_backup_zip, SCREENSHOTS_DIR, EXTRA_PAIRS_FILE
 
 router = APIRouter()
-
-DATA_DIR = DB_PATH.parent
-SCREENSHOTS_DIR = DATA_DIR / "screenshots"
-EXTRA_PAIRS_FILE = DATA_DIR / "extra_pairs.txt"
 
 
 @router.get("/backup")
@@ -28,30 +24,11 @@ async def download_backup():
     if not DB_PATH.exists():
         raise HTTPException(status_code=404, detail="No database found to back up.")
 
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    filename = f"journal_backup_{ts}.zip"
-
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        # Database
-        zf.write(str(DB_PATH), "journal.db")
-
-        # Screenshots
-        if SCREENSHOTS_DIR.exists():
-            for img in SCREENSHOTS_DIR.iterdir():
-                if img.is_file():
-                    zf.write(str(img), f"screenshots/{img.name}")
-
-        # Extra pairs
-        if EXTRA_PAIRS_FILE.exists():
-            zf.write(str(EXTRA_PAIRS_FILE), "extra_pairs.txt")
-
-    zip_buffer.seek(0)
-    size = len(zip_buffer.getvalue())
-    print(f"[backup] Created backup: {filename} ({size} bytes)")
+    zip_bytes, filename = create_backup_zip()
+    print(f"[backup] Created backup: {filename} ({len(zip_bytes)} bytes)")
 
     return StreamingResponse(
-        iter([zip_buffer.getvalue()]),
+        iter([zip_bytes]),
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )

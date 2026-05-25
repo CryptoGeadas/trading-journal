@@ -64,10 +64,58 @@ async function loadOverview() {
         // Check for stale sync
         checkStaleSyncWarning(data);
 
-        // Load patterns
+        // Load patterns and equity curve
         loadPatterns();
+        loadEquityCurve();
     } catch (err) {
         console.error('Failed to load overview:', err);
+    }
+}
+
+async function loadEquityCurve() {
+    try {
+        const data = await API.equityCurve();
+        const card = document.getElementById('equity-curve-card');
+        if (!data || data.length < 2) {
+            if (card) card.style.display = 'none';
+            return;
+        }
+        if (card) card.style.display = 'block';
+
+        const container = document.getElementById('equity-chart');
+        container.innerHTML = '';
+
+        const chart = LightweightCharts.createChart(container, {
+            layout: { background: { color: '#14151a' }, textColor: '#8b8d98' },
+            grid: { vertLines: { color: '#2a2b33' }, horzLines: { color: '#2a2b33' } },
+            width: container.clientWidth,
+            height: 300,
+            crosshair: { mode: LightweightCharts.CrosshairMode.Magnet },
+            rightPriceScale: { borderColor: '#2a2b33' },
+            timeScale: { borderColor: '#2a2b33' },
+        });
+
+        const lastPnl = data[data.length - 1].cumulative_pnl;
+        const isPositive = lastPnl >= 0;
+        const lineColor = isPositive ? '#34d399' : '#f87171';
+        const topColor = isPositive ? 'rgba(52, 211, 153, 0.25)' : 'rgba(248, 113, 113, 0.25)';
+        const bottomColor = isPositive ? 'rgba(52, 211, 153, 0.02)' : 'rgba(248, 113, 113, 0.02)';
+
+        const series = chart.addAreaSeries({
+            lineColor: lineColor,
+            topColor: topColor,
+            bottomColor: bottomColor,
+            lineWidth: 2,
+        });
+
+        series.setData(data.map(d => ({ time: d.date, value: d.cumulative_pnl })));
+        chart.timeScale().fitContent();
+
+        new ResizeObserver(() => {
+            chart.applyOptions({ width: container.clientWidth });
+        }).observe(container);
+    } catch (err) {
+        // Non-critical — equity curve is optional
     }
 }
 
@@ -986,6 +1034,17 @@ async function submitManualTrade() {
 
 // ---- Trade Detail Panel ----
 let _currentDetailTradeId = null;
+let _emotionTagCache = [];
+
+async function refreshEmotionTags() {
+    try { _emotionTagCache = await API.emotionTags(); } catch { _emotionTagCache = []; }
+}
+
+function setRatingStars(value) {
+    document.querySelectorAll('#trade-detail-rating .rating-star').forEach(star => {
+        star.classList.toggle('active', parseInt(star.dataset.value) <= value);
+    });
+}
 
 function openTradeDetail(tradeId, tradeData) {
     _currentDetailTradeId = tradeId;
@@ -1013,6 +1072,23 @@ function openTradeDetail(tradeId, tradeData) {
 
     if (notes) notes.value = tradeData.notes || '';
 
+    // Populate emotion tag dropdown
+    const emotionSelect = document.getElementById('trade-detail-emotion');
+    if (emotionSelect) {
+        emotionSelect.innerHTML = '<option value="">No emotion tag</option>';
+        _emotionTagCache.forEach(tag => {
+            const opt = document.createElement('option');
+            opt.value = tag.name;
+            opt.textContent = tag.name;
+            opt.style.color = tag.colour;
+            if (tradeData.emotion_tag === tag.name) opt.selected = true;
+            emotionSelect.appendChild(opt);
+        });
+    }
+
+    // Set rating stars
+    setRatingStars(tradeData.trade_rating || 0);
+
     openModal('modal-trade-detail');
 }
 
@@ -1025,17 +1101,24 @@ function openTradeDetailFromRow(row) {
     }
 }
 
-async function saveTradeNotes() {
+async function saveTradeDetail() {
     if (!_currentDetailTradeId) return;
     const notes = document.getElementById('trade-detail-notes')?.value || '';
+    const emotionTag = document.getElementById('trade-detail-emotion')?.value || '';
+    const activeStar = document.querySelector('#trade-detail-rating .rating-star.active:last-of-type');
+    const rating = activeStar ? parseInt(activeStar.dataset.value) : 0;
 
     try {
-        await API.updateTrade(_currentDetailTradeId, { notes: notes });
+        await API.updateTrade(_currentDetailTradeId, {
+            notes,
+            emotion_tag: emotionTag,
+            trade_rating: rating,
+        });
         closeModal('modal-trade-detail');
-        showToast('Notes saved', 'success');
+        showToast('Trade updated', 'success');
         loadTrades();
     } catch (err) {
-        showToast('Failed to save notes: ' + err.message, 'error');
+        showToast('Failed to save: ' + err.message, 'error');
     }
 }
 
@@ -1194,6 +1277,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-add-exchange')?.addEventListener('click', () => openModal('modal-add-exchange'));
     document.getElementById('btn-add-exchange-2')?.addEventListener('click', () => openModal('modal-add-exchange'));
 
+    // Show/hide passphrase field based on exchange
+    document.getElementById('new-exchange-type')?.addEventListener('change', (e) => {
+        const needs = ['gateio', 'kraken'].includes(e.target.value);
+        document.getElementById('passphrase-group').style.display = needs ? 'block' : 'none';
+    });
+
     // Submit exchange
     document.getElementById('btn-submit-exchange')?.addEventListener('click', async () => {
         const body = {
@@ -1202,6 +1291,7 @@ document.addEventListener('DOMContentLoaded', () => {
             api_secret: document.getElementById('new-exchange-secret')?.value,
             passphrase: document.getElementById('new-exchange-passphrase')?.value || null,
             label: document.getElementById('new-exchange-label')?.value || null,
+            sync_start_date: document.getElementById('new-exchange-start-date')?.value || null,
         };
         if (!body.exchange || !body.api_key || !body.api_secret) {
             showToast('Please fill in exchange, API key, and secret.', 'warning');
@@ -1231,7 +1321,20 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-submit-trade')?.addEventListener('click', submitManualTrade);
 
     // Trade detail notes
-    document.getElementById('btn-save-trade-notes')?.addEventListener('click', saveTradeNotes);
+    document.getElementById('btn-save-trade-notes')?.addEventListener('click', saveTradeDetail);
+
+    // Rating star click handlers
+    document.querySelectorAll('#trade-detail-rating .rating-star').forEach(star => {
+        star.addEventListener('click', () => {
+            const val = parseInt(star.dataset.value);
+            const current = document.querySelector('#trade-detail-rating .rating-star.active:last-of-type');
+            const currentVal = current ? parseInt(current.dataset.value) : 0;
+            setRatingStars(val === currentVal ? 0 : val);
+        });
+    });
+
+    // Load emotion tags on startup
+    refreshEmotionTags();
 
     // Notes page
     document.getElementById('btn-add-note')?.addEventListener('click', createNote);

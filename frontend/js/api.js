@@ -94,5 +94,10 @@ const API = {
     deleteNote:       (id)          => API.delete(`/notes/${id}`),
     createTrade:      (body)        => API.post('/trades', body),
     pairs:            ()          => API.get('/pairs'),
+    emotionTags:        ()          => API.get('/emotion-tags'),
+    createEmotionTag:   (body)      => API.post('/emotion-tags', body),
+    updateEmotionTag:   (id, body)  => API.patch(`/emotion-tags/${id}`, body),
+    deleteEmotionTag:   (id)        => API.delete(`/emotion-tags/${id}`, { confirm: true }),
+    equityCurve:        (params = {}) => API.get('/equity-curve', params),
     health:           ()          => fetch('/health').then(r => r.json()),
 };

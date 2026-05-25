@@ -1,7 +1,6 @@
 # ===== SENSITIVE DATA — NEVER COMMIT =====
-data/journal.db
-data/.encryption_key
-data/screenshots/
+data/*
+!data/.gitkeep
 .env
 
 # ===== Python =====

@@ -1,11 +1,12 @@
 """Database initialisation and connection management."""
 
 import sqlite3
+import uuid
 from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "journal.db"
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 MIGRATIONS = {
     1: """
@@ -130,7 +131,60 @@ MIGRATIONS = {
 
     PRAGMA user_version = 6;
     """,
+    7: """
+    CREATE TABLE IF NOT EXISTS tracked_pairs (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        exchange_id     TEXT NOT NULL,
+        pair            TEXT NOT NULL,
+        discovered_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(exchange_id, pair),
+        FOREIGN KEY (exchange_id) REFERENCES exchanges(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS emotion_tags (
+        id              TEXT PRIMARY KEY,
+        name            TEXT NOT NULL UNIQUE,
+        colour          TEXT NOT NULL DEFAULT '#6c9cfc',
+        is_default      INTEGER NOT NULL DEFAULT 0,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    ALTER TABLE exchanges ADD COLUMN sync_start_date TEXT;
+
+    ALTER TABLE trades ADD COLUMN emotion_tag TEXT;
+    ALTER TABLE trades ADD COLUMN trade_rating INTEGER;
+
+    CREATE INDEX IF NOT EXISTS idx_tracked_pairs_exchange ON tracked_pairs(exchange_id);
+    CREATE INDEX IF NOT EXISTS idx_trades_emotion ON trades(emotion_tag);
+
+    PRAGMA user_version = 7;
+    """,
 }
+
+
+_DEFAULT_EMOTION_TAGS = [
+    ("Followed Plan", "#34d399"),
+    ("FOMO", "#f87171"),
+    ("Revenge Trade", "#f87171"),
+    ("High Conviction", "#6c9cfc"),
+    ("Impulse", "#fbbf24"),
+    ("Overtraded", "#fbbf24"),
+    ("News-Driven", "#8b8d98"),
+]
+
+
+def _seed_emotion_tags(conn: sqlite3.Connection):
+    """Insert default emotion tags if they don't exist yet."""
+    for name, colour in _DEFAULT_EMOTION_TAGS:
+        tag_id = str(uuid.uuid4())[:8]
+        try:
+            conn.execute(
+                "INSERT INTO emotion_tags (id, name, colour, is_default) VALUES (?, ?, ?, 1)",
+                [tag_id, name, colour],
+            )
+        except Exception:
+            pass
+    conn.commit()
 
 
 def get_db() -> sqlite3.Connection:
@@ -152,6 +206,8 @@ def init_db():
         if version in MIGRATIONS:
             conn.executescript(MIGRATIONS[version])
             print(f"[db] Applied migration v{version}")
+            if version == 7:
+                _seed_emotion_tags(conn)
 
     conn.close()
     print(f"[db] Database ready at {DB_PATH} (v{SCHEMA_VERSION})")

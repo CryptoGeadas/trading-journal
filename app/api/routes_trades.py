@@ -119,6 +119,8 @@ async def list_trades(
                 MIN(trade_type)      as trade_type,
                 MIN(strategy)        as strategy,
                 MIN(notes)           as notes,
+                MIN(emotion_tag)     as emotion_tag,
+                MIN(trade_rating)    as trade_rating,
                 COUNT(*)             as fill_count
             FROM trades {where}
             GROUP BY {group_key}, exchange_id, pair, side
@@ -148,6 +150,8 @@ async def list_trades(
                 trade_type=r["trade_type"],
                 strategy=r["strategy"],
                 notes=r["notes"],
+                emotion_tag=r["emotion_tag"],
+                trade_rating=r["trade_rating"],
                 fill_count=r["fill_count"],
             ))
 
@@ -218,6 +222,15 @@ async def update_trade(trade_id: str, update: TradeUpdate):
             updates["strategy"] = update.strategy if update.strategy != "" else None
         if update.notes is not None:
             updates["notes"] = update.notes if update.notes != "" else None
+        if update.emotion_tag is not None:
+            updates["emotion_tag"] = update.emotion_tag if update.emotion_tag != "" else None
+        if update.trade_rating is not None:
+            if update.trade_rating == 0:
+                updates["trade_rating"] = None
+            elif 1 <= update.trade_rating <= 5:
+                updates["trade_rating"] = update.trade_rating
+            else:
+                raise HTTPException(status_code=400, detail="Trade rating must be between 1 and 5.")
 
         if updates:
             set_clause = ", ".join(f"{k} = ?" for k in updates)

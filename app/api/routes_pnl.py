@@ -1,5 +1,6 @@
 """PnL calculation engine — FIFO cost basis, realised PnL, performance stats."""
 
+from datetime import datetime
 from typing import Optional
 from collections import defaultdict, deque
 
@@ -107,6 +108,8 @@ def _calculate_pnl(
             breakdown = _group_results_by(rows, trades_by_pair, "exchange")
         elif group_by == "strategy":
             breakdown = _group_results_by(rows, trades_by_pair, "strategy")
+        elif group_by == "emotion_tag":
+            breakdown = _group_results_by(rows, trades_by_pair, "emotion_tag")
         elif group_by == "month":
             breakdown = _group_results_by_time(rows, trades_by_pair, "month")
         elif group_by == "week":
@@ -318,7 +321,7 @@ def _group_results_by_time(rows, trades_by_pair, period):
 
 @router.get("/pnl")
 async def calculate_pnl(
-    group_by: Optional[str] = Query(None, pattern="^(pair|exchange|strategy|month|week)$"),
+    group_by: Optional[str] = Query(None, pattern="^(pair|exchange|strategy|emotion_tag|month|week)$"),
     exchange: Optional[str] = None,
     pair: Optional[str] = None,
     trade_type: Optional[str] = None,
@@ -336,3 +339,94 @@ async def calculate_pnl(
         date_to=date_to,
         group_by=group_by,
     )
+
+
+@router.get("/equity-curve")
+async def equity_curve(
+    exchange: Optional[str] = None,
+    trade_type: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    """Return cumulative daily PnL for the equity curve chart."""
+    db = get_db()
+    try:
+        conditions = []
+        params = []
+        if exchange:
+            conditions.append("exchange = ?")
+            params.append(exchange)
+        if trade_type:
+            conditions.append("trade_type = ?")
+            params.append(trade_type)
+        if date_from:
+            conditions.append("timestamp >= ?")
+            params.append(date_from)
+        if date_to:
+            conditions.append("timestamp <= ?")
+            params.append(date_to)
+
+        where = " WHERE " + " AND ".join(conditions) if conditions else ""
+        rows = db.execute(
+            f"SELECT * FROM trades {where} ORDER BY pair, timestamp ASC", params
+        ).fetchall()
+
+        if not rows:
+            return []
+
+        trades_by_pair = defaultdict(list)
+        for r in rows:
+            trades_by_pair[r["pair"]].append(dict(r))
+
+        daily_pnl = defaultdict(float)
+
+        for pair, trades in trades_by_pair.items():
+            buy_queue = deque()
+            for t in trades:
+                qty = float(t["quantity"])
+                price = float(t["price"])
+                fee = float(t["fee"])
+
+                if t["side"] == "buy":
+                    buy_queue.append({
+                        "qty": qty,
+                        "price": price,
+                        "fee_per_unit": fee / max(qty, 0.00000001),
+                    })
+                elif t["side"] == "sell":
+                    remaining = qty
+                    cost_basis = 0.0
+                    buy_fees = 0.0
+
+                    while remaining > 0 and buy_queue:
+                        lot = buy_queue[0]
+                        match_qty = min(remaining, lot["qty"])
+                        cost_basis += match_qty * lot["price"]
+                        buy_fees += match_qty * lot["fee_per_unit"]
+                        lot["qty"] -= match_qty
+                        remaining -= match_qty
+                        if lot["qty"] <= 0.00000001:
+                            buy_queue.popleft()
+
+                    if cost_basis > 0:
+                        pnl = (qty * price) - cost_basis - buy_fees - fee
+                        sell_date = t["timestamp"][:10]
+                        daily_pnl[sell_date] += pnl
+
+        if not daily_pnl:
+            return []
+
+        sorted_dates = sorted(daily_pnl.keys())
+        cumulative = 0.0
+        result = []
+        for date in sorted_dates:
+            cumulative += daily_pnl[date]
+            result.append({
+                "date": date,
+                "daily_pnl": round(daily_pnl[date], 2),
+                "cumulative_pnl": round(cumulative, 2),
+            })
+
+        return result
+    finally:
+        db.close()
