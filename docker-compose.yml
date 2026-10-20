@@ -1,0 +1,18 @@
+services:
+  journal:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - journal-data:/app/data
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - SYNC_INTERVAL_HOURS=6
+      - DEFAULT_QUOTE_CURRENCY=USDT
+      - DEFAULT_PNL_METHOD=fifo
+    restart: unless-stopped
+
+volumes:
+  journal-data:
+    driver: local

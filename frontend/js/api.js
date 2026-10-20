@@ -1,0 +1,103 @@
+/**
+ * API client — thin wrapper around fetch for the trading journal backend.
+ */
+const API = {
+    base: '/api',
+
+    async get(path, params = {}) {
+        const url = new URL(this.base + path, window.location.origin);
+        Object.entries(params).forEach(([k, v]) => {
+            if (v !== null && v !== undefined && v !== '') {
+                url.searchParams.set(k, v);
+            }
+        });
+        const res = await fetch(url);
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: res.statusText }));
+            throw new Error(err.detail || 'API error');
+        }
+        return res.json();
+    },
+
+    async post(path, body = {}) {
+        const res = await fetch(this.base + path, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: res.statusText }));
+            throw new Error(err.detail || 'API error');
+        }
+        return res.json();
+    },
+
+    async patch(path, body = {}) {
+        const res = await fetch(this.base + path, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: res.statusText }));
+            throw new Error(err.detail || 'API error');
+        }
+        return res.json();
+    },
+
+    async delete(path, params = {}) {
+        const url = new URL(this.base + path, window.location.origin);
+        Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+        const res = await fetch(url, { method: 'DELETE' });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: res.statusText }));
+            throw new Error(err.detail || 'API error');
+        }
+        return res.json();
+    },
+
+    // Convenience methods
+    overview:     ()            => API.get('/overview'),
+    trades:       (params = {}) => API.get('/trades', params),
+    trade:        (id)          => API.get(`/trades/${id}`),
+    fills:        (orderId)     => API.get(`/trades/fills/${orderId}`),
+    updateTrade:  (id, body)    => API.patch(`/trades/${id}`, body),
+    exchanges:    ()            => API.get('/exchanges'),
+    addExchange:  (body)        => API.post('/exchanges', body),
+    syncExchange: (id)          => API.post(`/exchanges/${id}/sync`),
+    removeExchange: (id)        => API.delete(`/exchanges/${id}`, { confirm: true }),
+    syncLog:      (params = {}) => API.get('/sync-log', params),
+    pnl:          (params = {}) => API.get('/pnl', params),
+    strategies:       ()          => API.get('/strategies'),
+    strategy:         (id)        => API.get(`/strategies/${id}`),
+    createStrategy:   (body)      => API.post('/strategies', body),
+    updateStrategy:   (id, body)  => API.patch(`/strategies/${id}`, body),
+    deleteStrategy:   (id)        => API.delete(`/strategies/${id}`, { confirm: true }),
+    tradeScreenshots: (tradeId)   => API.get(`/trades/${tradeId}/screenshots`),
+    deleteScreenshot: (id)        => API.delete(`/screenshots/${id}`),
+    uploadScreenshot: async (tradeId, file) => {
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch(`/api/trades/${tradeId}/screenshots`, { method: 'POST', body: form });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: res.statusText }));
+            throw new Error(err.detail || 'Upload failed');
+        }
+        return res.json();
+    },
+    fundingFees:      (params = {}) => API.get('/funding-fees', params),
+    fundingSummary:   (params = {}) => API.get('/funding-fees/summary', params),
+    patterns:         ()            => API.get('/patterns'),
+    notes:            ()            => API.get('/notes'),
+    createNote:       (body)        => API.post('/notes', body),
+    updateNote:       (id, body)    => API.patch(`/notes/${id}`, body),
+    deleteNote:       (id)          => API.delete(`/notes/${id}`),
+    createTrade:      (body)        => API.post('/trades', body),
+    pairs:            ()          => API.get('/pairs'),
+    emotionTags:        ()          => API.get('/emotion-tags'),
+    createEmotionTag:   (body)      => API.post('/emotion-tags', body),
+    updateEmotionTag:   (id, body)  => API.patch(`/emotion-tags/${id}`, body),
+    deleteEmotionTag:   (id)        => API.delete(`/emotion-tags/${id}`, { confirm: true }),
+    equityCurve:        (params = {}) => API.get('/equity-curve', params),
+    health:           ()          => fetch('/health').then(r => r.json()),
+};

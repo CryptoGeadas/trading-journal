@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Journal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-brand">
+                <span class="brand-icon">◈</span>
+                <span class="brand-text">Journal</span>
+            </div>
+            <ul class="nav-list">
+                <li>
+                    <a href="#" class="nav-link active" data-page="overview">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                        <span>Overview</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-page="trades">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+                        <span>Trades</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-page="pnl">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        <span>PnL</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-page="strategies">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+                        <span>Strategies</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-page="notes">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                        <span>Notes</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-page="exchanges">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22 6 12 13 2 6"/></svg>
+                        <span>Exchanges</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link" data-page="settings">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                        <span>Settings</span>
+                    </a>
+                </li>
+            </ul>
+            <div class="sidebar-footer">
+                <div class="sync-status" id="globalSyncStatus">
+                    <span class="sync-dot"></span>
+                    <span class="sync-text">No exchanges</span>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+
+            <!-- ==================== OVERVIEW ==================== -->
+            <section class="page active" id="page-overview">
+                <header class="page-header">
+                    <h1>Overview</h1>
+                    <p class="page-subtitle">Your trading performance at a glance</p>
+                </header>
+
+                <div class="alert alert-warning" id="stale-sync-warning" style="display: none">
+                    <span class="alert-icon">⚠</span>
+                    <span class="alert-text" id="stale-sync-text">Trade data may be outdated.</span>
+                    <button class="btn btn-ghost btn-sm" onclick="navigateTo('exchanges')">Check Exchanges</button>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card primary">
+                        <span class="stat-label">Total PnL</span>
+                        <span class="stat-value" id="stat-total-pnl">$0.00</span>
+                        <span class="stat-note">All time</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">This Month</span>
+                        <span class="stat-value" id="stat-pnl-month">$0.00</span>
+                        <span class="stat-note" id="stat-trades-month">0 trades</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">This Week</span>
+                        <span class="stat-value" id="stat-pnl-week">$0.00</span>
+                        <span class="stat-note" id="stat-trades-week">0 trades</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Win Rate</span>
+                        <span class="stat-value" id="stat-win-rate">—</span>
+                        <span class="stat-note" id="stat-total-trades">0 total trades</span>
+                    </div>
+                </div>
+
+                <div class="stats-grid secondary">
+                    <div class="stat-card small">
+                        <span class="stat-label">Total Fees Paid</span>
+                        <span class="stat-value" id="stat-total-fees">$0.00</span>
+                    </div>
+                    <div class="stat-card small">
+                        <span class="stat-label">Exchanges</span>
+                        <span class="stat-value" id="stat-exchanges">0</span>
+                    </div>
+                    <div class="stat-card small">
+                        <span class="stat-label">Best Pair</span>
+                        <span class="stat-value" id="stat-best-pair">—</span>
+                    </div>
+                    <div class="stat-card small">
+                        <span class="stat-label">Worst Pair</span>
+                        <span class="stat-value" id="stat-worst-pair">—</span>
+                    </div>
+                </div>
+
+                <div class="empty-state" id="overview-empty">
+                    <div class="empty-icon">◈</div>
+                    <h3>No trades yet</h3>
+                    <p>Connect an exchange to start tracking your trades.</p>
+                    <button class="btn btn-primary" onclick="navigateTo('exchanges')">Add Exchange</button>
+                </div>
+
+                <!-- Equity Curve -->
+                <div id="equity-curve-card" style="display: none; margin-top: 1.5rem">
+                    <h3 class="card-title">Equity Curve</h3>
+                    <div id="equity-chart" style="height: 300px;"></div>
+                </div>
+
+                <!-- Pattern Insights -->
+                <div id="patterns-section" style="display: none; margin-top: 1.5rem">
+                    <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; letter-spacing: -0.01em">Pattern Insights</h3>
+                    <div class="patterns-grid" id="patterns-container"></div>
+                </div>
+            </section>
+
+            <!-- ==================== TRADES ==================== -->
+            <section class="page" id="page-trades">
+                <header class="page-header">
+                    <h1>Trades</h1>
+                    <div class="page-actions">
+                        <button class="btn btn-primary btn-sm" id="btn-add-trade">+ Add Trade</button>
+                        <label class="export-checkbox" title="Download as ZIP with chart images">
+                            <input type="checkbox" id="export-screenshots"> Charts
+                        </label>
+                        <select class="filter-select" id="export-format">
+                            <option value="xlsx">XLSX</option>
+                            <option value="csv">CSV</option>
+                        </select>
+                        <button class="btn btn-secondary" id="btn-export">Export</button>
+                    </div>
+                </header>
+
+                <!-- Filter bar -->
+                <div class="filter-bar">
+                    <select class="filter-select" id="filter-exchange">
+                        <option value="">All Exchanges</option>
+                    </select>
+                    <select class="filter-select" id="filter-pair">
+                        <option value="">All Pairs</option>
+                    </select>
+                    <select class="filter-select" id="filter-trade-type">
+                        <option value="">Spot & Futures</option>
+                        <option value="spot">Spot Only</option>
+                        <option value="futures">Futures Only</option>
+                    </select>
+                    <select class="filter-select" id="filter-side">
+                        <option value="">Buy & Sell</option>
+                        <option value="buy">Buy</option>
+                        <option value="sell">Sell</option>
+                    </select>
+                    <select class="filter-select" id="filter-strategy">
+                        <option value="">All Strategies</option>
+                        <option value="__untagged__">Untagged</option>
+                    </select>
+                    <input type="date" class="filter-input" id="filter-date-from" placeholder="From">
+                    <input type="date" class="filter-input" id="filter-date-to" placeholder="To">
+                    <button class="btn btn-ghost" id="btn-clear-filters">Clear</button>
+                </div>
+
+                <!-- Trades table -->
+                <div class="table-container">
+                    <table class="data-table" id="trades-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort="timestamp">Time</th>
+                                <th class="sortable" data-sort="exchange">Exchange</th>
+                                <th class="sortable" data-sort="pair">Pair</th>
+                                <th>Side</th>
+                                <th>Qty</th>
+                                <th>Price</th>
+                                <th class="sortable" data-sort="total">Total</th>
+                                <th>Fee</th>
+                                <th>Strategy</th>
+                                <th>Charts</th>
+                                <th>Fills</th>
+                            </tr>
+                        </thead>
+                        <tbody id="trades-tbody">
+                            <tr class="empty-row">
+                                <td colspan="11">
+                                    <div class="table-empty">No trades loaded. Connect an exchange and sync to see data here.</div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination" id="trades-pagination">
+                    <span class="pagination-info" id="pagination-info">0 trades</span>
+                    <div class="pagination-controls">
+                        <button class="btn btn-ghost btn-sm" id="btn-prev" disabled>← Prev</button>
+                        <span class="pagination-page" id="pagination-page">Page 1</span>
+                        <button class="btn btn-ghost btn-sm" id="btn-next" disabled>Next →</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== PNL ==================== -->
+            <section class="page" id="page-pnl">
+                <header class="page-header">
+                    <h1>PnL Breakdown</h1>
+                    <div class="page-actions">
+                        <select class="filter-select" id="pnl-group-by">
+                            <option value="pair">By Pair</option>
+                            <option value="exchange">By Exchange</option>
+                            <option value="strategy">By Strategy</option>
+                            <option value="emotion_tag">By Emotion</option>
+                            <option value="month">By Month</option>
+                            <option value="week">By Week</option>
+                        </select>
+                    </div>
+                </header>
+
+                <div class="stats-grid">
+                    <div class="stat-card primary">
+                        <span class="stat-label">Realised PnL</span>
+                        <span class="stat-value" id="pnl-total">$0.00</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Win Rate</span>
+                        <span class="stat-value" id="pnl-win-rate">—</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Profit Factor</span>
+                        <span class="stat-value" id="pnl-profit-factor">—</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Closed Trades</span>
+                        <span class="stat-value" id="pnl-trade-count">0</span>
+                    </div>
+                </div>
+
+                <div class="stats-grid secondary">
+                    <div class="stat-card small">
+                        <span class="stat-label">Avg Win</span>
+                        <span class="stat-value positive" id="pnl-avg-win">$0.00</span>
+                    </div>
+                    <div class="stat-card small">
+                        <span class="stat-label">Avg Loss</span>
+                        <span class="stat-value negative" id="pnl-avg-loss">$0.00</span>
+                    </div>
+                    <div class="stat-card small">
+                        <span class="stat-label">Best Pair</span>
+                        <span class="stat-value" id="pnl-best-pair">—</span>
+                    </div>
+                    <div class="stat-card small">
+                        <span class="stat-label">Worst Pair</span>
+                        <span class="stat-value" id="pnl-worst-pair">—</span>
+                    </div>
+                </div>
+
+                <!-- PnL breakdown table -->
+                <div class="card">
+                    <h3 class="card-title" id="pnl-table-title">PnL by Pair</h3>
+                    <div class="table-container">
+                        <table class="data-table" id="pnl-table">
+                            <thead>
+                                <tr>
+                                    <th>Group</th>
+                                    <th>Trades</th>
+                                    <th>PnL</th>
+                                    <th>Fees</th>
+                                    <th>Win Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pnl-tbody">
+                                <tr class="empty-row">
+                                    <td colspan="5">
+                                        <div class="table-empty">No PnL data. Complete a buy+sell round-trip to see results.</div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== STRATEGIES ==================== -->
+            <section class="page" id="page-strategies">
+                <header class="page-header">
+                    <h1>Strategies</h1>
+                    <div class="page-actions">
+                        <button class="btn btn-ghost btn-sm" onclick="importStrategies()">Import</button>
+                        <button class="btn btn-ghost btn-sm" onclick="exportStrategies()">Export</button>
+                        <button class="btn btn-primary" id="btn-add-strategy">+ New Strategy</button>
+                    </div>
+                </header>
+
+                <div class="strategies-grid" id="strategies-list">
+                    <div class="empty-state">
+                        <div class="empty-icon">📖</div>
+                        <h3>No strategies yet</h3>
+                        <p>Create your first strategy to start building your playbook.</p>
+                        <button class="btn btn-primary" onclick="openModal('modal-strategy')">+ New Strategy</button>
+                    </div>
+                </div>
+
+                <!-- Strategy Create/Edit Modal -->
+                <div class="modal-backdrop" id="modal-strategy" style="display: none">
+                    <div class="modal modal-wide">
+                        <div class="modal-header">
+                            <h2 id="strategy-modal-title">New Strategy</h2>
+                            <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-strategy')">✕</button>
+                        </div>
+                        <div class="modal-body">
+                            <input type="hidden" id="strategy-edit-id" value="">
+                            <div class="form-group">
+                                <label>Strategy Name</label>
+                                <input type="text" class="filter-input" id="strategy-name" placeholder='e.g. "Momentum Scalp", "DCA Accumulate"'>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group" style="flex: 1">
+                                    <label>Colour</label>
+                                    <div class="colour-picker" id="strategy-colour-picker">
+                                        <button class="colour-swatch active" data-colour="#6c9cfc" style="background:#6c9cfc" title="Blue"></button>
+                                        <button class="colour-swatch" data-colour="#34d399" style="background:#34d399" title="Green"></button>
+                                        <button class="colour-swatch" data-colour="#f87171" style="background:#f87171" title="Red"></button>
+                                        <button class="colour-swatch" data-colour="#fbbf24" style="background:#fbbf24" title="Yellow"></button>
+                                        <button class="colour-swatch" data-colour="#a78bfa" style="background:#a78bfa" title="Purple"></button>
+                                        <button class="colour-swatch" data-colour="#f472b6" style="background:#f472b6" title="Pink"></button>
+                                        <button class="colour-swatch" data-colour="#fb923c" style="background:#fb923c" title="Orange"></button>
+                                        <button class="colour-swatch" data-colour="#38bdf8" style="background:#38bdf8" title="Sky"></button>
+                                        <button class="colour-swatch" data-colour="#e2e8f0" style="background:#e2e8f0" title="Light"></button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Short Description</label>
+                                <input type="text" class="filter-input" id="strategy-description" placeholder="One-liner about this strategy">
+                            </div>
+                            <div class="form-group">
+                                <label>Playbook <span class="label-optional">(rules, entry/exit criteria, notes)</span></label>
+                                <textarea class="filter-input strategy-playbook" id="strategy-playbook" rows="8" placeholder="Write your strategy rules here...&#10;&#10;Example:&#10;- Entry: Buy when RSI < 30 on 4h chart&#10;- Exit: Sell at 10% profit or -5% stop loss&#10;- Max position size: 5% of portfolio&#10;- Only trade during London + NY sessions"></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-ghost" onclick="closeModal('modal-strategy')">Cancel</button>
+                            <button class="btn btn-primary" id="btn-save-strategy">Save Strategy</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delete Confirmation Modal -->
+                <div class="modal-backdrop" id="modal-delete-strategy" style="display: none">
+                    <div class="modal">
+                        <div class="modal-header">
+                            <h2>Delete Strategy</h2>
+                            <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-delete-strategy')">✕</button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Are you sure you want to delete <strong id="delete-strategy-name"></strong>? Trades tagged with this strategy will be untagged.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-ghost" onclick="closeModal('modal-delete-strategy')">Cancel</button>
+                            <button class="btn btn-danger" id="btn-confirm-delete-strategy">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== NOTES ==================== -->
+            <section class="page" id="page-notes">
+                <header class="page-header">
+                    <h1>Notebook</h1>
+                    <div class="page-actions">
+                        <button class="btn btn-primary" id="btn-add-note">+ New Note</button>
+                    </div>
+                </header>
+
+                <div class="notes-grid" id="notes-list">
+                    <div class="empty-state">
+                        <div class="empty-icon">📝</div>
+                        <h3>No notes yet</h3>
+                        <p>Create a note to jot down ideas, research, or observations (max 4).</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== EXCHANGES ==================== -->
+            <section class="page" id="page-exchanges">
+                <header class="page-header">
+                    <h1>Exchange Connections</h1>
+                    <div class="page-actions">
+                        <button class="btn btn-primary" id="btn-add-exchange">+ Add Exchange</button>
+                    </div>
+                </header>
+
+                <div class="exchanges-list" id="exchanges-list">
+                    <div class="empty-state">
+                        <div class="empty-icon">⟐</div>
+                        <h3>No exchanges connected</h3>
+                        <p>Connect your first exchange to start syncing trades.</p>
+                        <button class="btn btn-primary" id="btn-add-exchange-2">+ Add Exchange</button>
+                    </div>
+                </div>
+
+                <!-- Add Exchange Modal -->
+                <div class="modal-backdrop" id="modal-add-exchange" style="display: none">
+                    <div class="modal">
+                        <div class="modal-header">
+                            <h2>Connect Exchange</h2>
+                            <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-add-exchange')">✕</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="form-group">
+                                <label>Exchange</label>
+                                <select class="filter-select" id="new-exchange-type">
+                                    <option value="">Select exchange...</option>
+                                    <option value="binance">Binance</option>
+                                    <option value="gateio">Gate.io</option>
+                                    <option value="kraken">Kraken</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Label <span class="label-optional">(optional)</span></label>
+                                <input type="text" class="filter-input" id="new-exchange-label" placeholder='e.g. "Binance Spot Main"'>
+                            </div>
+                            <div class="form-group">
+                                <label>API Key</label>
+                                <input type="text" class="filter-input" id="new-exchange-key" placeholder="Paste your read-only API key">
+                            </div>
+                            <div class="form-group">
+                                <label>API Secret</label>
+                                <input type="password" class="filter-input" id="new-exchange-secret" placeholder="Paste your API secret">
+                            </div>
+                            <div class="form-group" id="passphrase-group" style="display: none">
+                                <label>Passphrase</label>
+                                <input type="password" class="filter-input" id="new-exchange-passphrase" placeholder="Exchange passphrase">
+                            </div>
+                            <div class="form-group">
+                                <label>Sync Start Date <span class="label-optional">(default: January 1 of current year)</span></label>
+                                <input type="date" class="filter-input" id="new-exchange-start-date">
+                            </div>
+                            <div class="notice warning">
+                                <strong>Important:</strong> Create API keys with <strong>read-only</strong> permissions. Withdrawal and transfer permissions must be disabled — the app will reject keys that have them. For Binance futures, "Enable Futures" is required for reading trade history (the app never places orders).
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-ghost" onclick="closeModal('modal-add-exchange')">Cancel</button>
+                            <button class="btn btn-primary" id="btn-submit-exchange">Connect Exchange</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sync Log -->
+                <div class="card" style="margin-top: 2rem">
+                    <h3 class="card-title">Sync Log</h3>
+                    <div class="table-container">
+                        <table class="data-table" id="sync-log-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Exchange</th>
+                                    <th>Status</th>
+                                    <th>Trades</th>
+                                    <th>Error</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sync-log-tbody">
+                                <tr class="empty-row">
+                                    <td colspan="5">
+                                        <div class="table-empty">No sync history yet.</div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== SETTINGS ==================== -->
+            <section class="page" id="page-settings">
+                <header class="page-header">
+                    <h1>Settings</h1>
+                </header>
+
+                <div class="card">
+                    <h3 class="card-title">Display Preferences</h3>
+                    <div class="form-group">
+                        <label>Default Quote Currency</label>
+                        <select class="filter-select" id="setting-quote-currency">
+                            <option value="USDT">USDT</option>
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                            <option value="BTC">BTC</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Default PnL Method</label>
+                        <select class="filter-select" id="setting-pnl-method">
+                            <option value="fifo">FIFO</option>
+                            <option value="avg_cost">Average Cost</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 1.5rem">
+                    <h3 class="card-title">Data Management</h3>
+                    <p class="form-note" style="margin-top: 0; margin-bottom: 0.75rem">
+                        Backup includes your database, screenshots, and extra_pairs.txt — everything needed to restore your journal.
+                    </p>
+                    <div class="form-row">
+                        <button class="btn btn-secondary" onclick="downloadBackup()">Download Backup</button>
+                        <label class="btn btn-secondary" style="cursor: pointer">
+                            Restore Backup
+                            <input type="file" accept=".zip" style="display:none" onchange="restoreBackup(this.files[0])">
+                        </label>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 1.5rem">
+                    <h3 class="card-title">System Info</h3>
+                    <div class="info-list">
+                        <div class="info-row">
+                            <span class="info-label">Version</span>
+                            <span class="info-value" id="info-version">—</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Database</span>
+                            <span class="info-value">SQLite (local)</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">API Status</span>
+                            <span class="info-value" id="info-api-status">Checking...</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==================== MANUAL TRADE MODAL ==================== -->
+            <div class="modal-backdrop" id="modal-add-trade" style="display: none">
+                <div class="modal modal-wide">
+                    <div class="modal-header">
+                        <h2>Add Manual Trade</h2>
+                        <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-add-trade')">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1">
+                                <label>Exchange</label>
+                                <input type="text" class="filter-input" id="mt-exchange" value="manual" placeholder="e.g. manual, OTC, Kraken">
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label>Trade Type</label>
+                                <select class="filter-select" id="mt-trade-type">
+                                    <option value="spot">Spot</option>
+                                    <option value="futures">Futures</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1">
+                                <label>Pair</label>
+                                <input type="text" class="filter-input" id="mt-pair" placeholder="e.g. BTC/USDT">
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label>Side</label>
+                                <select class="filter-select" id="mt-side">
+                                    <option value="buy">Buy</option>
+                                    <option value="sell">Sell</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1">
+                                <label>Quantity</label>
+                                <input type="number" class="filter-input" id="mt-quantity" step="any" placeholder="0.00">
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label>Price</label>
+                                <input type="number" class="filter-input" id="mt-price" step="any" placeholder="0.00">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1">
+                                <label>Fee</label>
+                                <input type="number" class="filter-input" id="mt-fee" step="any" value="0" placeholder="0.00">
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label>Fee Currency</label>
+                                <input type="text" class="filter-input" id="mt-fee-currency" value="USDT" placeholder="USDT">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group" style="flex:1">
+                                <label>Date/Time <span class="label-optional">(leave blank for now)</span></label>
+                                <input type="datetime-local" class="filter-input" id="mt-timestamp">
+                            </div>
+                            <div class="form-group" style="flex:1">
+                                <label>Order ID <span class="label-optional">(optional)</span></label>
+                                <input type="text" class="filter-input" id="mt-order-id" placeholder="Exchange order ID">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Strategy <span class="label-optional">(optional)</span></label>
+                            <select class="filter-select" id="mt-strategy">
+                                <option value="">No strategy</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Notes <span class="label-optional">(optional)</span></label>
+                            <textarea class="filter-input" id="mt-notes" rows="3" placeholder="Trade rationale, context..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-ghost" onclick="closeModal('modal-add-trade')">Cancel</button>
+                        <button class="btn btn-primary" id="btn-submit-trade">Add Trade</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== TRADE DETAIL PANEL ==================== -->
+            <div class="modal-backdrop" id="modal-trade-detail" style="display: none">
+                <div class="modal modal-wide">
+                    <div class="modal-header">
+                        <h2 id="trade-detail-title">Trade Detail</h2>
+                        <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-trade-detail')">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="trade-detail-info" id="trade-detail-info"></div>
+                        <div class="form-row" style="margin-top: 1rem; display: flex; gap: 1rem;">
+                            <div class="form-group" style="flex: 1;">
+                                <label>Emotion Tag</label>
+                                <select class="filter-select" id="trade-detail-emotion">
+                                    <option value="">No emotion tag</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label>Trade Rating</label>
+                                <div class="rating-selector" id="trade-detail-rating">
+                                    <span class="rating-star" data-value="1">&#9733;</span>
+                                    <span class="rating-star" data-value="2">&#9733;</span>
+                                    <span class="rating-star" data-value="3">&#9733;</span>
+                                    <span class="rating-star" data-value="4">&#9733;</span>
+                                    <span class="rating-star" data-value="5">&#9733;</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top: 1rem">
+                            <label>Notes</label>
+                            <textarea class="filter-input" id="trade-detail-notes" rows="5" placeholder="Add notes about this trade..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-ghost" onclick="closeModal('modal-trade-detail')">Cancel</button>
+                        <button class="btn btn-primary" id="btn-save-trade-notes">Save</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== LIGHTBOX ==================== -->
+            <div class="lightbox" id="lightbox" style="display: none" onclick="closeLightbox()">
+                <img id="lightbox-img" src="" alt="Screenshot">
+                <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+            </div>
+
+        </main>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
