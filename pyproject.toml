@@ -8,7 +8,8 @@ dependencies = [
     "uvicorn[standard]>=0.27",
     "pydantic>=2.0",
     "python-multipart>=0.0.6",
-    "ccxt>=4.0",
+    # Upper bound: ccxt renames exchange classes in minor releases (e.g. gateio -> gate).
+    "ccxt>=4.5.45,<4.6",
     "apscheduler>=3.10",
     "openpyxl>=3.1",
     "cryptography>=42.0",

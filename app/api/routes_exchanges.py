@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from app.database import get_db
 from app.models import ExchangeOut, ExchangeCreate
 from app.encryption import encrypt
-from app.exchanges.connector import create_client, validate_read_only, ExchangeError
+from app.exchanges.connector import SUPPORTED_EXCHANGES, create_client, validate_read_only, ExchangeError
 from app.exchanges.sync import sync_exchange
 
 router = APIRouter()
@@ -55,8 +55,8 @@ def add_exchange(body: ExchangeCreate):
       these for reading futures trade history; the app contains no order
       placement code).
     """
-    if body.exchange not in ("binance", "gateio", "kraken"):
-        raise HTTPException(status_code=400, detail="Unsupported exchange. Use: binance, gateio, kraken")
+    if body.exchange not in SUPPORTED_EXCHANGES:
+        raise HTTPException(status_code=400, detail=f"Unsupported exchange. Use: {', '.join(SUPPORTED_EXCHANGES)}")
 
     try:
         client = create_client(
@@ -69,7 +69,7 @@ def add_exchange(body: ExchangeCreate):
         raise HTTPException(status_code=400, detail=str(e))
 
     # Validate permissions
-    validation = validate_read_only(client)
+    validation = validate_read_only(body.exchange, client)
 
     # Hard block: keys with dangerous permissions (withdrawals, transfers)
     if validation.get("error"):

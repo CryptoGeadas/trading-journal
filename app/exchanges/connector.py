@@ -9,9 +9,11 @@ from app.exchanges.gateio import GateioAdapter
 from app.exchanges.kraken import KrakenAdapter
 
 
+# Keys are the names stored in the database. ccxt renamed Gate.io's class
+# from `gateio` to `gate`, so the stored name and ccxt's id can differ.
 SUPPORTED_EXCHANGES = {
     "binance": ccxt.binance,
-    "gateio": ccxt.gateio,
+    "gateio": ccxt.gate,
     "kraken": ccxt.kraken,
 }
 
@@ -64,25 +66,16 @@ def create_client(
     return cls(config)
 
 
-def validate_read_only(client: ccxt.Exchange) -> dict:
-    """Validate API key permissions by delegating to the exchange adapter."""
-    adapter = ADAPTERS.get(client.id)
+def validate_read_only(exchange: str, client: ccxt.Exchange) -> dict:
+    """Validate API key permissions with the adapter for the stored exchange name."""
+    adapter = ADAPTERS.get(exchange)
     if adapter:
         return adapter.check_permissions(client)
 
-    # Fallback for unknown exchanges
-    try:
-        client.fetch_balance()
-        return {
-            "is_read_only": True,
-            "permissions": ["read (unverified)"],
-            "warnings": [],
-            "error": None,
-        }
-    except Exception as e:
-        return {
-            "is_read_only": False,
-            "permissions": [],
-            "warnings": [],
-            "error": f"Unexpected error: {type(e).__name__}: {e}",
-        }
+    # Never trust a key whose permissions we can't check.
+    return {
+        "is_read_only": False,
+        "permissions": [],
+        "warnings": [],
+        "error": f"Cannot check API key permissions for exchange: {exchange}",
+    }

@@ -208,7 +208,7 @@ trading-journal/
 │   ├── exchanges/
 │   │   ├── base.py           # ExchangeAdapter ABC + shared helpers
 │   │   ├── binance.py        # Binance adapter (spot + futures + funding)
-│   │   ├── gateio.py         # Gate.io adapter (spot, bulk + per-symbol)
+│   │   ├── gateio.py         # Gate.io adapter (spot, per-symbol)
 │   │   ├── kraken.py         # Kraken adapter (spot, bulk + per-symbol)
 │   │   ├── connector.py      # ccxt wrapper + adapter factory
 │   │   └── sync.py           # Sync orchestrator (pair tracking, dedup)
