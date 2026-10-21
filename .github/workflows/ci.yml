@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  no-private-files:
+    # User data (database, encryption key, .env, screenshots, backups) must never
+    # be in the repo. It lives in ~/.trading-journal; this check is the backstop.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Block databases, keys, .env and data folders
+        run: |
+          blocked=$(git ls-files | grep -Ei '(\.db|\.db-wal|\.db-shm|\.sqlite|\.sqlite3)$|(^|/)\.encryption_key$|(^|/)\.env$|(^|/)data/|(^|/)\.trading-journal/' || true)
+          if [ -n "$blocked" ]; then
+            echo "::error::Private files must never be committed. Remove them from git (and treat them as leaked):"
+            echo "$blocked"
+            exit 1
+          fi
+          echo "No private files in the repo."
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+      - name: Run tests
+        run: python -m pytest -q

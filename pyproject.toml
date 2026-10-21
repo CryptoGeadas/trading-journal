@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "httpx", "packaging"]
 
 # Installs the dependencies; the journal itself runs from the repo folder
 # (`python -m app`), which also holds the frontend it serves.
