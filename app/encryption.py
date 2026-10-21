@@ -1,10 +1,10 @@
 """Encryption helpers for API key storage."""
 
 import os
-from pathlib import Path
 from cryptography.fernet import Fernet
 
-_KEY_PATH = Path(__file__).resolve().parent.parent / "data" / ".encryption_key"
+from app import paths
+
 _fernet = None
 
 
@@ -14,19 +14,20 @@ def _get_fernet() -> Fernet:
     if _fernet is not None:
         return _fernet
 
-    _KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    key_path = paths.encryption_key_path()
+    key_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if _KEY_PATH.exists():
-        key = _KEY_PATH.read_bytes().strip()
+    if key_path.exists():
+        key = key_path.read_bytes().strip()
     else:
         key = Fernet.generate_key()
-        _KEY_PATH.write_bytes(key)
+        key_path.write_bytes(key)
         # Restrict file permissions (best-effort on Windows)
         try:
-            os.chmod(str(_KEY_PATH), 0o600)
+            os.chmod(str(key_path), 0o600)
         except OSError:
             pass
-        print(f"[encryption] Generated new encryption key at {_KEY_PATH}")
+        print(f"[encryption] Generated new encryption key at {key_path}")
 
     _fernet = Fernet(key)
     return _fernet

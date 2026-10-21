@@ -488,6 +488,20 @@ async function loadSettings() {
     } catch (err) {
         setText('info-api-status', '○ Unreachable');
     }
+    try {
+        const system = await API.get('/system');
+        setText('info-data-dir', system.data_dir);
+        const warning = document.getElementById('info-left-behind');
+        if (warning && system.left_behind.length) {
+            warning.textContent = 'Some files from an older version could not be moved into the data folder '
+                + 'because a file with the same name is already there or was in use: '
+                + system.left_behind.join(', ')
+                + '. Check both copies and keep the one you need.';
+            warning.style.display = 'block';
+        }
+    } catch (err) {
+        setText('info-data-dir', 'Unknown (could not load)');
+    }
 }
 
 // ---- Modals ----

@@ -2,7 +2,19 @@
 
 import sqlite3
 import pytest
+from app import encryption, paths
 from app.database import MIGRATIONS, SCHEMA_VERSION, _seed_emotion_tags
+
+
+@pytest.fixture(autouse=True)
+def data_root(tmp_path, monkeypatch):
+    """Every test gets its own data folder; nothing touches the real one."""
+    root = tmp_path / "data-root"
+    monkeypatch.setenv(paths.DATA_DIR_ENV, str(root))
+    monkeypatch.setattr(paths, "LEGACY_DATA_DIR", tmp_path / "no-legacy")
+    monkeypatch.setattr(encryption, "_fernet", None)
+    root.mkdir()
+    return root
 
 
 @pytest.fixture

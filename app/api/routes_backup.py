@@ -7,8 +7,9 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
-from app.database import DB_PATH, init_db
-from app.services.backup import create_backup_zip, SCREENSHOTS_DIR, EXTRA_PAIRS_FILE
+from app import paths
+from app.database import init_db
+from app.services.backup import create_backup_zip
 
 router = APIRouter()
 
@@ -21,7 +22,7 @@ async def download_backup():
     - screenshots/ (all chart images)
     - extra_pairs.txt (custom pair list)
     """
-    if not DB_PATH.exists():
+    if not paths.db_path().exists():
         raise HTTPException(status_code=404, detail="No database found to back up.")
 
     zip_bytes, filename = create_backup_zip()
@@ -59,31 +60,32 @@ async def restore_backup(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Invalid ZIP file.")
 
     # Extract everything
+    screenshots_dir = paths.screenshots_dir()
     with zipfile.ZipFile(io.BytesIO(contents)) as zf:
         # Restore database
         with zf.open("journal.db") as src:
-            DB_PATH.write_bytes(src.read())
+            paths.db_path().write_bytes(src.read())
 
         # Restore screenshots
-        if SCREENSHOTS_DIR.exists():
-            shutil.rmtree(SCREENSHOTS_DIR)
-        SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+        if screenshots_dir.exists():
+            shutil.rmtree(screenshots_dir)
+        screenshots_dir.mkdir(parents=True, exist_ok=True)
 
         for name in names:
             if name.startswith("screenshots/") and not name.endswith("/"):
                 img_name = Path(name).name
                 with zf.open(name) as src:
-                    (SCREENSHOTS_DIR / img_name).write_bytes(src.read())
+                    (screenshots_dir / img_name).write_bytes(src.read())
 
         # Restore extra pairs
         if "extra_pairs.txt" in names:
             with zf.open("extra_pairs.txt") as src:
-                EXTRA_PAIRS_FILE.write_bytes(src.read())
+                paths.extra_pairs_file().write_bytes(src.read())
 
     # Re-run migrations in case the backup is from an older version
     init_db()
 
-    screenshot_count = len(list(SCREENSHOTS_DIR.iterdir())) if SCREENSHOTS_DIR.exists() else 0
+    screenshot_count = len(list(screenshots_dir.iterdir())) if screenshots_dir.exists() else 0
     print(f"[restore] Backup restored: journal.db + {screenshot_count} screenshots")
 
     return {

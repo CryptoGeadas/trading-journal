@@ -1,6 +1,7 @@
 # ===== SENSITIVE DATA — NEVER COMMIT =====
-data/*
-!data/.gitkeep
+# User data lives in ~/.trading-journal (outside the repo). The old in-repo
+# folder stays ignored in case an older version left files behind.
+data/
 .env
 
 # ===== Python =====

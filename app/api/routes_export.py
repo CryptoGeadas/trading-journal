@@ -9,11 +9,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
+from app import paths
 from app.database import get_db
 
 router = APIRouter()
 
-SCREENSHOTS_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "screenshots"
 
 EXPORT_COLUMNS = [
     ("timestamp", "Time"),
@@ -192,7 +192,7 @@ def _export_zip(rows: list[dict], filename: str, format: str) -> StreamingRespon
             side = row.get("side", "").lower()
 
             for idx, ss in enumerate(screenshots[key], 1):
-                src_path = SCREENSHOTS_DIR / ss["filename"]
+                src_path = paths.screenshots_dir() / ss["filename"]
                 if not src_path.exists():
                     continue
 

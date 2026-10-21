@@ -4,7 +4,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - journal-data:/app/data
+      - journal-data:/data
     environment:
       - HOST=0.0.0.0
       - PORT=8000

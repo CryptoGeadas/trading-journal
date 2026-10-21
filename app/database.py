@@ -2,9 +2,7 @@
 
 import sqlite3
 import uuid
-from pathlib import Path
-
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "journal.db"
+from app import paths
 
 SCHEMA_VERSION = 7
 
@@ -189,7 +187,7 @@ def _seed_emotion_tags(conn: sqlite3.Connection):
 
 def get_db() -> sqlite3.Connection:
     """Get a database connection with row factory."""
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(paths.db_path()))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
@@ -198,7 +196,7 @@ def get_db() -> sqlite3.Connection:
 
 def init_db():
     """Run any pending migrations."""
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    paths.db_path().parent.mkdir(parents=True, exist_ok=True)
     conn = get_db()
     current_version = conn.execute("PRAGMA user_version").fetchone()[0]
 
@@ -210,4 +208,4 @@ def init_db():
                 _seed_emotion_tags(conn)
 
     conn.close()
-    print(f"[db] Database ready at {DB_PATH} (v{SCHEMA_VERSION})")
+    print(f"[db] Database ready at {paths.db_path()} (v{SCHEMA_VERSION})")

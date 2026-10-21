@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
+from app import paths
 from app.database import init_db
 from app.scheduler import start_scheduler, stop_scheduler
 from app.api.routes_overview import router as overview_router
@@ -26,7 +27,8 @@ from app.api.routes_emotion_tags import router as emotion_tags_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialise database and scheduler on startup."""
+    """Move old in-repo data, then initialise database and scheduler on startup."""
+    paths.migrate_legacy_data()
     init_db()
     start_scheduler()
     yield
@@ -90,6 +92,15 @@ app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 @app.get("/")
 async def serve_index():
     return FileResponse(FRONTEND_DIR / "index.html")
+
+
+@app.get("/api/system")
+async def system_info():
+    """Local-only details for the Settings page (behind auth, unlike /health)."""
+    return {
+        "data_dir": str(paths.data_dir()),
+        "left_behind": [str(p) for p in paths.left_behind],
+    }
 
 
 @app.get("/health")

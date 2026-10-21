@@ -2,13 +2,13 @@
 
 import time
 from abc import ABC, abstractmethod
-from pathlib import Path
 from typing import Optional
 
 import ccxt
 
+from app import paths
 
-EXTRA_PAIRS_FILE = Path(__file__).resolve().parent.parent.parent / "data" / "extra_pairs.txt"
+
 
 QUOTE_CURRENCIES = ["USDT", "USDC", "BTC", "ETH", "USD"]
 
@@ -127,12 +127,13 @@ class ExchangeAdapter(ABC):
 
     @staticmethod
     def load_extra_pairs(futures: bool = False) -> set[str]:
-        """Read data/extra_pairs.txt, returning spot or futures pairs."""
+        """Read extra_pairs.txt from the data folder, returning spot or futures pairs."""
         pairs = set()
-        if not EXTRA_PAIRS_FILE.exists():
+        extra_pairs_file = paths.extra_pairs_file()
+        if not extra_pairs_file.exists():
             return pairs
         try:
-            for line in EXTRA_PAIRS_FILE.read_text().strip().splitlines():
+            for line in extra_pairs_file.read_text().strip().splitlines():
                 pair = line.strip().upper()
                 if not pair or "/" not in pair:
                     continue

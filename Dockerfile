@@ -15,8 +15,10 @@ RUN pip install --no-cache-dir .
 COPY app/ app/
 COPY frontend/ frontend/
 
-# Data directory (will be a volume)
-RUN mkdir -p /app/data
+# User data lives in a volume outside the app folder
+ENV TRADING_JOURNAL_DATA_DIR=/data
+RUN mkdir -p /data
+VOLUME /data
 
 EXPOSE 8000
 

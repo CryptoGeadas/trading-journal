@@ -7,18 +7,18 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
+from app import paths
 from app.database import get_db
 
 router = APIRouter()
 
-SCREENSHOTS_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "screenshots"
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 MAX_PER_TRADE = 2
 
 
 def _ensure_dir():
-    SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    paths.screenshots_dir().mkdir(parents=True, exist_ok=True)
 
 
 @router.post("/trades/{trade_id}/screenshots")
@@ -67,7 +67,7 @@ async def upload_screenshot(trade_id: str, file: UploadFile = File(...)):
         # Save file
         screenshot_id = str(uuid.uuid4())[:12]
         stored_name = f"{screenshot_id}{ext}"
-        file_path = SCREENSHOTS_DIR / stored_name
+        file_path = paths.screenshots_dir() / stored_name
 
         with open(file_path, "wb") as f:
             f.write(contents)
@@ -94,7 +94,7 @@ async def upload_screenshot(trade_id: str, file: UploadFile = File(...)):
 @router.get("/screenshots/{filename}")
 async def serve_screenshot(filename: str):
     """Serve a screenshot file."""
-    file_path = SCREENSHOTS_DIR / filename
+    file_path = paths.screenshots_dir() / filename
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Screenshot not found")
 
@@ -155,7 +155,7 @@ async def delete_screenshot(screenshot_id: str):
             raise HTTPException(status_code=404, detail="Screenshot not found")
 
         # Delete file
-        file_path = SCREENSHOTS_DIR / row["filename"]
+        file_path = paths.screenshots_dir() / row["filename"]
         if file_path.exists():
             file_path.unlink()
 

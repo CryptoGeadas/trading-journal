@@ -47,6 +47,7 @@ cp .env.example .env
 | `AUTH_USER` | *(empty)* | Basic auth username (leave empty to disable auth) |
 | `AUTH_PASS` | *(empty)* | Basic auth password (leave empty to disable auth) |
 | `BACKUP_RETENTION_COUNT` | `7` | Number of auto-backups to keep |
+| `TRADING_JOURNAL_DATA_DIR` | `~/.trading-journal` | Where your database, key, screenshots and backups live (never inside the repo) |
 
 ---
 
@@ -114,7 +115,7 @@ cp .env.example .env
 ### Hardening
 - **Optional basic auth**: set `AUTH_USER` and `AUTH_PASS` in `.env` to protect the dashboard with HTTP Basic Authentication
 - **Backup/restore**: one-click download of a ZIP containing database, screenshots, and extra_pairs.txt. Restore from any backup file
-- **Daily auto-backup**: the scheduler automatically saves a backup every 24 hours to `data/backups/`, keeping the most recent backups (configurable via `BACKUP_RETENTION_COUNT`)
+- **Daily auto-backup**: the scheduler automatically saves a backup every 24 hours to the `backups/` folder in your data folder, keeping the most recent backups (configurable via `BACKUP_RETENTION_COUNT`)
 - **Toast notifications**: all confirmations and errors shown as slide-in toasts (no browser alert popups)
 - **Stale data warnings**: overview page and exchange cards flag when sync is overdue (>24 hours)
 
@@ -167,23 +168,24 @@ The app uses a two-layer security model:
 
 ### Data Safety
 
-- **All data stays local** — SQLite file + screenshot images on your machine
-- **API keys encrypted at rest** — Fernet encryption, key stored locally in `data/.encryption_key`
-- **Never committed to Git** — the `.gitignore` excludes the entire `data/` directory (except `.gitkeep`)
+- **All data stays local** — everything lives in one data folder in your user profile: `~/.trading-journal` (on Windows `C:\Users\<you>\.trading-journal`). Set `TRADING_JOURNAL_DATA_DIR` to use another folder. The Settings page shows where it is.
+- **Outside the repo** — the data folder is never inside the code folder, so it can't be committed to Git by accident. Older versions kept data in the repo's `data/` folder; it is moved to the data folder automatically on first start (existing files are never overwritten).
+- **API keys encrypted at rest** — Fernet encryption, key stored in `.encryption_key` in your data folder
 - **Strategy & emotion tag backup** — export/import as JSON to protect against database resets
-- **Extra pairs file** — `data/extra_pairs.txt` survives database resets (add fully-sold pairs here)
+- **Extra pairs file** — `extra_pairs.txt` in your data folder survives database resets (add fully-sold pairs here)
 - **Full backup/restore** — download everything as a ZIP from the Settings page
 - **Auto-backup** — daily snapshots with automatic rotation
 
 ### GitHub Safety
 
-The `.gitignore` uses a blanket `data/*` rule with only `data/.gitkeep` whitelisted. This protects:
-- `data/journal.db` (contains encrypted API keys and trade data)
-- `data/.encryption_key` (the encryption key — if this leaks, API keys can be decrypted)
-- `data/screenshots/` (personal chart images)
-- `data/backups/` (auto-backup ZIPs)
-- `data/extra_pairs.txt` (custom pair list)
-- `.env` (environment variables including auth credentials)
+Private files live in your data folder, outside the repo:
+- `journal.db` (contains encrypted API keys and trade data)
+- `.encryption_key` (the encryption key — if this leaks, API keys can be decrypted)
+- `screenshots/` (personal chart images)
+- `backups/` (auto-backup ZIPs)
+- `extra_pairs.txt` (custom pair list)
+
+`.env` (auth credentials) and any old in-repo `data/` folder are also in `.gitignore`.
 
 **If you previously committed without a proper .gitignore**, you should rotate your API keys on the exchanges and delete the old keys.
 
@@ -232,16 +234,10 @@ trading-journal/
 │   ├── conftest.py           # Shared fixtures (fresh DB with all migrations)
 │   ├── test_pnl.py           # FIFO matching engine tests
 │   ├── test_dedup.py         # Trade insert + deduplication tests
-│   └── test_encryption.py    # Encryption round-trip tests
-├── data/
-│   ├── .gitkeep              # Keeps data/ in Git while ignoring contents
-│   ├── journal.db            # SQLite database (auto-created, NEVER commit)
-│   ├── .encryption_key       # Fernet key (auto-generated, NEVER commit)
-│   ├── extra_pairs.txt       # Additional pairs for sync discovery
-│   ├── screenshots/          # Uploaded chart images (NEVER commit)
-│   └── backups/              # Daily auto-backup ZIPs (NEVER commit)
+│   ├── test_encryption.py    # Encryption round-trip tests
+│   └── test_paths.py         # Data folder location + migration tests
 ├── .env.example              # Environment variable template
-├── .gitignore                # Blanket data/* protection
+├── .gitignore
 ├── docker-compose.yml
 ├── Dockerfile
 ├── pyproject.toml
