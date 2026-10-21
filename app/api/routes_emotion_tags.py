@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from app.database import get_db
-from app.models import EmotionTagOut, EmotionTagCreate, EmotionTagUpdate
+from app.models import EmotionTagOut, EmotionTagCreate, EmotionTagUpdate, check_import_entries
 
 router = APIRouter()
 
@@ -178,13 +178,14 @@ def import_emotion_tags(data: dict):
     tags = data.get("emotion_tags", [])
     if not tags:
         raise HTTPException(status_code=400, detail="No emotion tags found in the import data.")
+    tags = check_import_entries(tags, (), "emotion tags")
 
     db = get_db()
     try:
         imported = 0
         skipped = 0
         for t in tags:
-            name = t.get("name", "").strip()
+            name = (t.get("name") or "").strip()
             if not name:
                 continue
 
@@ -199,7 +200,7 @@ def import_emotion_tags(data: dict):
             now = datetime.now(timezone.utc).isoformat()
             db.execute(
                 "INSERT INTO emotion_tags (id, name, colour, is_default, created_at) VALUES (?, ?, ?, 0, ?)",
-                [tag_id, name, t.get("colour", "#6c9cfc"), now],
+                [tag_id, name, t["colour"], now],
             )
             imported += 1
 

@@ -80,7 +80,7 @@
                 <div class="alert alert-warning" id="stale-sync-warning" style="display: none">
                     <span class="alert-icon">⚠</span>
                     <span class="alert-text" id="stale-sync-text">Trade data may be outdated.</span>
-                    <button class="btn btn-ghost btn-sm" onclick="navigateTo('exchanges')">Check Exchanges</button>
+                    <button class="btn btn-ghost btn-sm" data-action="navigate" data-target="exchanges">Check Exchanges</button>
                 </div>
 
                 <div class="stats-grid">
@@ -129,7 +129,7 @@
                     <div class="empty-icon">◈</div>
                     <h3>No trades yet</h3>
                     <p>Connect an exchange to start tracking your trades.</p>
-                    <button class="btn btn-primary" onclick="navigateTo('exchanges')">Add Exchange</button>
+                    <button class="btn btn-primary" data-action="navigate" data-target="exchanges">Add Exchange</button>
                 </div>
 
                 <!-- Equity Curve -->
@@ -314,8 +314,8 @@
                 <header class="page-header">
                     <h1>Strategies</h1>
                     <div class="page-actions">
-                        <button class="btn btn-ghost btn-sm" onclick="importStrategies()">Import</button>
-                        <button class="btn btn-ghost btn-sm" onclick="exportStrategies()">Export</button>
+                        <button class="btn btn-ghost btn-sm" data-action="import-strategies">Import</button>
+                        <button class="btn btn-ghost btn-sm" data-action="export-strategies">Export</button>
                         <button class="btn btn-primary" id="btn-add-strategy">+ New Strategy</button>
                     </div>
                 </header>
@@ -325,7 +325,7 @@
                         <div class="empty-icon">📖</div>
                         <h3>No strategies yet</h3>
                         <p>Create your first strategy to start building your playbook.</p>
-                        <button class="btn btn-primary" onclick="openModal('modal-strategy')">+ New Strategy</button>
+                        <button class="btn btn-primary" data-action="new-strategy">+ New Strategy</button>
                     </div>
                 </div>
 
@@ -334,7 +334,7 @@
                     <div class="modal modal-wide">
                         <div class="modal-header">
                             <h2 id="strategy-modal-title">New Strategy</h2>
-                            <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-strategy')">✕</button>
+                            <button class="btn btn-ghost btn-sm modal-close" data-action="close-modal" data-modal="modal-strategy">✕</button>
                         </div>
                         <div class="modal-body">
                             <input type="hidden" id="strategy-edit-id" value="">
@@ -368,7 +368,7 @@
                             </div>
                         </div>
                         <div class="modal-footer">
-                            <button class="btn btn-ghost" onclick="closeModal('modal-strategy')">Cancel</button>
+                            <button class="btn btn-ghost" data-action="close-modal" data-modal="modal-strategy">Cancel</button>
                             <button class="btn btn-primary" id="btn-save-strategy">Save Strategy</button>
                         </div>
                     </div>
@@ -379,13 +379,13 @@
                     <div class="modal">
                         <div class="modal-header">
                             <h2>Delete Strategy</h2>
-                            <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-delete-strategy')">✕</button>
+                            <button class="btn btn-ghost btn-sm modal-close" data-action="close-modal" data-modal="modal-delete-strategy">✕</button>
                         </div>
                         <div class="modal-body">
                             <p>Are you sure you want to delete <strong id="delete-strategy-name"></strong>? Trades tagged with this strategy will be untagged.</p>
                         </div>
                         <div class="modal-footer">
-                            <button class="btn btn-ghost" onclick="closeModal('modal-delete-strategy')">Cancel</button>
+                            <button class="btn btn-ghost" data-action="close-modal" data-modal="modal-delete-strategy">Cancel</button>
                             <button class="btn btn-danger" id="btn-confirm-delete-strategy">Delete</button>
                         </div>
                     </div>
@@ -433,7 +433,7 @@
                     <div class="modal">
                         <div class="modal-header">
                             <h2>Connect Exchange</h2>
-                            <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-add-exchange')">✕</button>
+                            <button class="btn btn-ghost btn-sm modal-close" data-action="close-modal" data-modal="modal-add-exchange">✕</button>
                         </div>
                         <div class="modal-body">
                             <div class="form-group">
@@ -470,7 +470,7 @@
                             </div>
                         </div>
                         <div class="modal-footer">
-                            <button class="btn btn-ghost" onclick="closeModal('modal-add-exchange')">Cancel</button>
+                            <button class="btn btn-ghost" data-action="close-modal" data-modal="modal-add-exchange">Cancel</button>
                             <button class="btn btn-primary" id="btn-submit-exchange">Connect Exchange</button>
                         </div>
                     </div>
@@ -534,10 +534,10 @@
                         Backup includes your database, screenshots, and extra_pairs.txt — everything needed to restore your journal.
                     </p>
                     <div class="form-row">
-                        <button class="btn btn-secondary" onclick="downloadBackup()">Download Backup</button>
+                        <button class="btn btn-secondary" data-action="download-backup">Download Backup</button>
                         <label class="btn btn-secondary" style="cursor: pointer">
                             Restore Backup
-                            <input type="file" accept=".zip" style="display:none" onchange="restoreBackup(this.files[0])">
+                            <input type="file" accept=".zip" style="display:none" data-change="restore-backup">
                         </label>
                     </div>
                 </div>
@@ -571,7 +571,7 @@
                 <div class="modal modal-wide">
                     <div class="modal-header">
                         <h2>Add Manual Trade</h2>
-                        <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-add-trade')">✕</button>
+                        <button class="btn btn-ghost btn-sm modal-close" data-action="close-modal" data-modal="modal-add-trade">✕</button>
                     </div>
                     <div class="modal-body">
                         <div class="form-row">
@@ -642,7 +642,7 @@
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn-ghost" onclick="closeModal('modal-add-trade')">Cancel</button>
+                        <button class="btn btn-ghost" data-action="close-modal" data-modal="modal-add-trade">Cancel</button>
                         <button class="btn btn-primary" id="btn-submit-trade">Add Trade</button>
                     </div>
                 </div>
@@ -653,7 +653,7 @@
                 <div class="modal modal-wide">
                     <div class="modal-header">
                         <h2 id="trade-detail-title">Trade Detail</h2>
-                        <button class="btn btn-ghost btn-sm modal-close" onclick="closeModal('modal-trade-detail')">✕</button>
+                        <button class="btn btn-ghost btn-sm modal-close" data-action="close-modal" data-modal="modal-trade-detail">✕</button>
                     </div>
                     <div class="modal-body">
                         <div class="trade-detail-info" id="trade-detail-info"></div>
@@ -681,16 +681,16 @@
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn-ghost" onclick="closeModal('modal-trade-detail')">Cancel</button>
+                        <button class="btn btn-ghost" data-action="close-modal" data-modal="modal-trade-detail">Cancel</button>
                         <button class="btn btn-primary" id="btn-save-trade-notes">Save</button>
                     </div>
                 </div>
             </div>
 
             <!-- ==================== LIGHTBOX ==================== -->
-            <div class="lightbox" id="lightbox" style="display: none" onclick="closeLightbox()">
+            <div class="lightbox" id="lightbox" style="display: none" data-action="close-lightbox">
                 <img id="lightbox-img" src="" alt="Screenshot">
-                <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+                <button class="lightbox-close" data-action="close-lightbox">✕</button>
             </div>
 
         </main>

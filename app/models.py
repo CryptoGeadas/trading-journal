@@ -2,8 +2,43 @@
 
 from __future__ import annotations
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel
+import re
+from typing import Annotated, Optional
+
+from fastapi import HTTPException
+from pydantic import BaseModel, StringConstraints
+
+# Colours end up in style attributes in the page, so only #rrggbb is allowed.
+HEX_COLOUR_PATTERN = r"^#[0-9a-fA-F]{6}$"
+HexColour = Annotated[str, StringConstraints(pattern=HEX_COLOUR_PATTERN)]
+DEFAULT_COLOUR = "#6c9cfc"
+
+
+def check_import_entries(entries, text_fields: tuple[str, ...], kind: str) -> list[dict]:
+    """Validate every entry of an imported JSON file before anything is saved.
+
+    Raises 400 naming the first bad entry, so a crafted or broken file adds nothing.
+    Returns the entries with missing fields filled in.
+    """
+    if not isinstance(entries, list):
+        raise HTTPException(status_code=400, detail=f"The file has no list of {kind}.")
+    clean = []
+    for i, entry in enumerate(entries, 1):
+        label = f"entry {i}"
+        if not isinstance(entry, dict):
+            raise HTTPException(status_code=400, detail=f"Import refused: {label} is not an object.")
+        name = entry.get("name")
+        if isinstance(name, str) and name.strip():
+            label = f"'{name.strip()[:60]}'"
+        for field in ("name",) + text_fields:
+            value = entry.get(field)
+            if value is not None and not isinstance(value, str):
+                raise HTTPException(status_code=400, detail=f"Import refused: {field} of {label} must be text.")
+        colour = entry.get("colour") or DEFAULT_COLOUR  # older exports may have none
+        if not isinstance(colour, str) or not re.fullmatch(HEX_COLOUR_PATTERN, colour):
+            raise HTTPException(status_code=400, detail=f"Import refused: colour of {label} must look like #34d399.")
+        clean.append({**entry, "colour": colour})
+    return clean
 
 
 # --- Overview ---
@@ -156,14 +191,14 @@ class StrategyOut(BaseModel):
 class StrategyCreate(BaseModel):
     name: str
     description: Optional[str] = None
-    colour: str = "#6c9cfc"
+    colour: HexColour = DEFAULT_COLOUR
     playbook: Optional[str] = None
 
 
 class StrategyUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    colour: Optional[str] = None
+    colour: Optional[HexColour] = None
     playbook: Optional[str] = None
 
 
@@ -180,12 +215,12 @@ class EmotionTagOut(BaseModel):
 
 class EmotionTagCreate(BaseModel):
     name: str
-    colour: str = "#6c9cfc"
+    colour: HexColour = DEFAULT_COLOUR
 
 
 class EmotionTagUpdate(BaseModel):
     name: Optional[str] = None
-    colour: Optional[str] = None
+    colour: Optional[HexColour] = None
 
 
 # --- Sync Log ---

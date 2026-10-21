@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from app.database import get_db
-from app.models import StrategyOut, StrategyCreate, StrategyUpdate
+from app.models import StrategyOut, StrategyCreate, StrategyUpdate, check_import_entries
 
 router = APIRouter()
 
@@ -198,13 +198,14 @@ def import_strategies(data: dict):
     strategies = data.get("strategies", [])
     if not strategies:
         raise HTTPException(status_code=400, detail="No strategies found in the import data.")
+    strategies = check_import_entries(strategies, ("description", "playbook"), "strategies")
 
     db = get_db()
     try:
         imported = 0
         skipped = 0
         for s in strategies:
-            name = s.get("name", "").strip()
+            name = (s.get("name") or "").strip()
             if not name:
                 continue
 
@@ -224,9 +225,9 @@ def import_strategies(data: dict):
                 [
                     strategy_id,
                     name,
-                    s.get("description", ""),
-                    s.get("colour", "#6c9cfc"),
-                    s.get("playbook", ""),
+                    s.get("description") or "",
+                    s["colour"],
+                    s.get("playbook") or "",
                     now,
                     now,
                 ],

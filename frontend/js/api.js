@@ -1,6 +1,12 @@
 /**
  * API client — thin wrapper around fetch for the trading journal backend.
  */
+// FastAPI sends `detail` as text, or as a list of {loc, msg} for invalid input.
+function errorText(detail) {
+    if (Array.isArray(detail)) return detail.map(d => d.msg || String(d)).join('; ');
+    return detail;
+}
+
 const API = {
     base: '/api',
 
@@ -14,7 +20,7 @@ const API = {
         const res = await fetch(url);
         if (!res.ok) {
             const err = await res.json().catch(() => ({ detail: res.statusText }));
-            throw new Error(err.detail || 'API error');
+            throw new Error(errorText(err.detail) || 'API error');
         }
         return res.json();
     },
@@ -27,7 +33,7 @@ const API = {
         });
         if (!res.ok) {
             const err = await res.json().catch(() => ({ detail: res.statusText }));
-            throw new Error(err.detail || 'API error');
+            throw new Error(errorText(err.detail) || 'API error');
         }
         return res.json();
     },
@@ -40,7 +46,7 @@ const API = {
         });
         if (!res.ok) {
             const err = await res.json().catch(() => ({ detail: res.statusText }));
-            throw new Error(err.detail || 'API error');
+            throw new Error(errorText(err.detail) || 'API error');
         }
         return res.json();
     },
@@ -51,7 +57,7 @@ const API = {
         const res = await fetch(url, { method: 'DELETE' });
         if (!res.ok) {
             const err = await res.json().catch(() => ({ detail: res.statusText }));
-            throw new Error(err.detail || 'API error');
+            throw new Error(errorText(err.detail) || 'API error');
         }
         return res.json();
     },
@@ -81,7 +87,7 @@ const API = {
         const res = await fetch(`/api/trades/${tradeId}/screenshots`, { method: 'POST', body: form });
         if (!res.ok) {
             const err = await res.json().catch(() => ({ detail: res.statusText }));
-            throw new Error(err.detail || 'Upload failed');
+            throw new Error(errorText(err.detail) || 'Upload failed');
         }
         return res.json();
     },

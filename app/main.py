@@ -70,6 +70,36 @@ if AUTH_USER and AUTH_PASS:
 
     app.add_middleware(BasicAuthMiddleware)
 
+# --- Security headers ---
+# The page loads only its own files. script-src 'self' blocks inline script and
+# inline event handlers, so text that slips into the HTML can't run; and
+# connect-src/img-src 'self' stop anything from sending data to another host.
+CONTENT_SECURITY_POLICY = "; ".join([
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+])
+# FastAPI's own API docs pages load their scripts from a CDN.
+_DOCS_PATHS = {"/docs", "/docs/oauth2-redirect", "/redoc"}
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    if request.url.path not in _DOCS_PATHS:
+        response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
 # --- API routes ---
 app.include_router(overview_router, prefix="/api")
 app.include_router(trades_router, prefix="/api")

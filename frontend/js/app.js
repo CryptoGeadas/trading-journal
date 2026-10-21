@@ -185,11 +185,11 @@ async function loadPnl() {
             const pnlClass = b.total_pnl >= 0 ? 'positive' : 'negative';
             return `
             <tr>
-                <td><strong>${b.group}</strong></td>
-                <td class="mono">${b.trade_count}</td>
-                <td class="mono ${pnlClass}">${formatCurrency(b.total_pnl)}</td>
-                <td class="mono">${formatCurrency(b.total_fees)}</td>
-                <td class="mono">${b.win_rate}%</td>
+                <td><strong>${esc(b.group)}</strong></td>
+                <td class="mono">${esc(b.trade_count)}</td>
+                <td class="mono ${pnlClass}">${esc(formatCurrency(b.total_pnl))}</td>
+                <td class="mono">${esc(formatCurrency(b.total_fees))}</td>
+                <td class="mono">${esc(b.win_rate)}%</td>
             </tr>`;
         }).join('');
     } catch (err) {
@@ -289,11 +289,11 @@ function renderTradesTable(trades) {
     tbody.innerHTML = trades.map(t => {
         const hasMultipleFills = t.fill_count > 1;
         const expandBtn = hasMultipleFills
-            ? `<span class="fill-toggle" onclick="event.stopPropagation(); toggleFills('${t.order_id || t.id}', this)" title="Click to expand fills">▶ ${t.fill_count}</span>`
+            ? `<span class="fill-toggle" data-action="toggle-fills" data-order="${esc(t.order_id || t.id)}" title="Click to expand fills">▶ ${esc(t.fill_count)}</span>`
             : `<span style="color:var(--text-muted)">1</span>`;
 
         const strategyCell = t.strategy
-            ? `<span class="strategy-badge" style="background:${getStrategyColour(t.strategy)}22; color:${getStrategyColour(t.strategy)}; border: 1px solid ${getStrategyColour(t.strategy)}44">${t.strategy}</span>`
+            ? `<span class="strategy-badge" style="background:${getStrategyColour(t.strategy)}22; color:${getStrategyColour(t.strategy)}; border: 1px solid ${getStrategyColour(t.strategy)}44">${esc(t.strategy)}</span>`
             : '<span style="color:var(--text-muted)">—</span>';
 
         const typeBadge = t.trade_type === 'futures'
@@ -301,25 +301,25 @@ function renderTradesTable(trades) {
             : '';
 
         return `
-        <tr data-id="${t.id}" data-order-id="${t.order_id || ''}" class="${hasMultipleFills ? 'expandable' : ''}" onclick="openTradeDetailFromRow(this)" data-trade='${JSON.stringify(t).replace(/'/g, "&#39;")}'>
-            <td class="mono">${formatTime(t.timestamp)}</td>
-            <td>${capitalise(t.exchange)}</td>
-            <td><strong>${t.pair}</strong>${typeBadge}</td>
-            <td class="side-${t.side}">${t.side.toUpperCase()}</td>
-            <td class="mono">${formatQty(t.quantity)}</td>
-            <td class="mono">${formatPrice(t.price)}</td>
-            <td class="mono">${formatCurrency(t.total)}</td>
-            <td class="mono">${formatFee(t.fee, t.fee_currency)}</td>
-            <td class="strategy-cell" onclick="event.stopPropagation(); openTagPopup('${t.id}', this, '${t.strategy || ''}')">${strategyCell}</td>
-            <td class="screenshots-cell" id="ss-${t.id}" onclick="event.stopPropagation()">
-                <div class="ss-row" id="ssr-${t.id}">
+        <tr data-id="${esc(t.id)}" data-order-id="${esc(t.order_id || '')}" class="${hasMultipleFills ? 'expandable' : ''}" data-action="open-trade" data-trade="${esc(JSON.stringify(t))}">
+            <td class="mono">${esc(formatTime(t.timestamp))}</td>
+            <td>${esc(capitalise(t.exchange))}</td>
+            <td><strong>${esc(t.pair)}</strong>${typeBadge}</td>
+            <td class="${sideClass(t.side)}">${esc(t.side.toUpperCase())}</td>
+            <td class="mono">${esc(formatQty(t.quantity))}</td>
+            <td class="mono">${esc(formatPrice(t.price))}</td>
+            <td class="mono">${esc(formatCurrency(t.total))}</td>
+            <td class="mono">${esc(formatFee(t.fee, t.fee_currency))}</td>
+            <td class="strategy-cell" data-action="tag-popup" data-id="${esc(t.id)}" data-strategy="${esc(t.strategy || '')}">${strategyCell}</td>
+            <td class="screenshots-cell" id="ss-${esc(t.id)}" data-action="none">
+                <div class="ss-row" id="ssr-${esc(t.id)}">
                     <label class="ss-upload-btn" title="Add chart screenshot">
-                        <input type="file" accept="image/*" style="display:none" onchange="uploadScreenshot('${t.id}', this.files[0])">
+                        <input type="file" accept="image/*" style="display:none" data-change="upload-screenshot" data-id="${esc(t.id)}">
                         +
                     </label>
                 </div>
             </td>
-            <td class="fills-col" onclick="event.stopPropagation()">${expandBtn}</td>
+            <td class="fills-col" data-action="none">${expandBtn}</td>
         </tr>`;
     }).join('');
 
@@ -329,7 +329,7 @@ function renderTradesTable(trades) {
 
 async function toggleFills(orderId, toggleEl) {
     const parentRow = toggleEl.closest('tr');
-    const existingFills = parentRow.parentNode.querySelectorAll(`.fill-row[data-order="${orderId}"]`);
+    const existingFills = [...parentRow.parentNode.querySelectorAll('.fill-row')].filter(r => r.dataset.order === orderId);
 
     // If fills are already shown, collapse them
     if (existingFills.length > 0) {
@@ -342,15 +342,15 @@ async function toggleFills(orderId, toggleEl) {
     try {
         const fills = await API.fills(orderId);
         const fillRows = fills.map(f => `
-            <tr class="fill-row" data-order="${orderId}">
-                <td class="mono fill-indent">${formatTime(f.timestamp)}</td>
+            <tr class="fill-row" data-order="${esc(orderId)}" data-action="none">
+                <td class="mono fill-indent">${esc(formatTime(f.timestamp))}</td>
                 <td style="color:var(--text-muted)">↳ fill</td>
-                <td>${f.pair}</td>
-                <td class="side-${f.side}">${f.side.toUpperCase()}</td>
-                <td class="mono">${formatQty(f.quantity)}</td>
-                <td class="mono">${formatPrice(f.price)}</td>
-                <td class="mono">${formatCurrency(f.total)}</td>
-                <td class="mono">${formatFee(f.fee, f.fee_currency)}</td>
+                <td>${esc(f.pair)}</td>
+                <td class="${sideClass(f.side)}">${esc(f.side.toUpperCase())}</td>
+                <td class="mono">${esc(formatQty(f.quantity))}</td>
+                <td class="mono">${esc(formatPrice(f.price))}</td>
+                <td class="mono">${esc(formatCurrency(f.total))}</td>
+                <td class="mono">${esc(formatFee(f.fee, f.fee_currency))}</td>
                 <td></td>
                 <td></td>
                 <td></td>
@@ -388,7 +388,7 @@ async function loadExchanges() {
                     <div class="empty-icon">⟐</div>
                     <h3>No exchanges connected</h3>
                     <p>Connect your first exchange to start syncing trades.</p>
-                    <button class="btn btn-primary" onclick="openModal('modal-add-exchange')">+ Add Exchange</button>
+                    <button class="btn btn-primary" data-action="open-modal" data-modal="modal-add-exchange">+ Add Exchange</button>
                 </div>`;
             return;
         }
@@ -400,7 +400,7 @@ async function loadExchanges() {
                 const hoursAgo = (Date.now() - new Date(e.last_sync_at).getTime()) / (1000 * 60 * 60);
                 if (hoursAgo > 24) {
                     staleClass = ' exchange-card-stale';
-                    staleTag = `<span class="stale-tag">Stale — ${Math.floor(hoursAgo / 24)}d ago</span>`;
+                    staleTag = `<span class="stale-tag">Stale — ${esc(Math.floor(hoursAgo / 24))}d ago</span>`;
                 }
             } else {
                 staleTag = '<span class="stale-tag">Never synced</span>';
@@ -412,16 +412,16 @@ async function loadExchanges() {
             return `
             <div class="exchange-card${staleClass}">
                 <div class="exchange-info">
-                    <h3>${e.label || capitalise(e.exchange)} ${staleTag}</h3>
+                    <h3>${esc(e.label || capitalise(e.exchange))} ${staleTag}</h3>
                     <div class="exchange-meta">
-                        ${e.trade_count} trades · 
-                        Last sync: ${e.last_sync_at ? formatTime(e.last_sync_at) : 'Never'} ·
-                        Status: <span style="color:${statusColour}; font-weight:600">${e.last_sync_status || 'Not synced'}</span>
+                        ${esc(e.trade_count)} trades ·
+                        Last sync: ${esc(e.last_sync_at ? formatTime(e.last_sync_at) : 'Never')} ·
+                        Status: <span style="color:${statusColour}; font-weight:600">${esc(e.last_sync_status || 'Not synced')}</span>
                     </div>
                 </div>
                 <div class="exchange-actions">
-                    <button class="btn btn-secondary btn-sm" onclick="syncExchange('${e.id}')">Sync Now</button>
-                    <button class="btn btn-danger btn-sm" onclick="removeExchange('${e.id}', '${e.label || e.exchange}')">Remove</button>
+                    <button class="btn btn-secondary btn-sm" data-action="sync-exchange" data-id="${esc(e.id)}">Sync Now</button>
+                    <button class="btn btn-danger btn-sm" data-action="remove-exchange" data-id="${esc(e.id)}" data-name="${esc(e.label || e.exchange)}">Remove</button>
                 </div>
             </div>`;
         }).join('');
@@ -448,11 +448,11 @@ async function loadSyncLog() {
 
         tbody.innerHTML = logs.map(l => `
             <tr>
-                <td class="mono">${formatTime(l.started_at)}</td>
-                <td>${l.exchange_id}</td>
+                <td class="mono">${esc(formatTime(l.started_at))}</td>
+                <td>${esc(l.exchange_id)}</td>
                 <td>${statusBadge(l.status)}</td>
-                <td class="mono">${l.trades_fetched}</td>
-                <td style="color:var(--red); max-width:200px; overflow:hidden; text-overflow:ellipsis">${l.error_message || '—'}</td>
+                <td class="mono">${esc(l.trades_fetched)}</td>
+                <td style="color:var(--red); max-width:200px; overflow:hidden; text-overflow:ellipsis" title="${esc(l.error_message || '')}">${esc(l.error_message || '—')}</td>
             </tr>
         `).join('');
     } catch (err) {
@@ -558,10 +558,14 @@ function colourPnl(id, val) {
     if (val < 0) el.classList.add('negative');
 }
 
+function sideClass(side) {
+    return side === 'buy' || side === 'sell' ? `side-${side}` : '';
+}
+
 function statusBadge(status) {
     const colours = { success: 'var(--green)', error: 'var(--red)', running: 'var(--yellow)' };
     const colour = colours[status] || 'var(--text-muted)';
-    return `<span style="color:${colour}; font-weight:600">${status}</span>`;
+    return `<span style="color:${colour}; font-weight:600">${esc(status)}</span>`;
 }
 
 function setText(id, text) {
@@ -574,7 +578,7 @@ let _strategyCache = [];
 
 function getStrategyColour(name) {
     const s = _strategyCache.find(s => s.name === name);
-    return s ? s.colour : '#6c9cfc';
+    return safeColour(s ? s.colour : null);
 }
 
 // ---- Strategies Page ----
@@ -591,25 +595,25 @@ async function loadStrategies() {
                     <div class="empty-icon">📖</div>
                     <h3>No strategies yet</h3>
                     <p>Create your first strategy to start building your playbook.</p>
-                    <button class="btn btn-primary" onclick="openStrategyModal()">+ New Strategy</button>
+                    <button class="btn btn-primary" data-action="new-strategy">+ New Strategy</button>
                 </div>`;
             return;
         }
 
         container.innerHTML = strategies.map(s => `
-            <div class="strategy-card" style="border-left: 4px solid ${s.colour}">
+            <div class="strategy-card" style="border-left: 4px solid ${safeColour(s.colour)}">
                 <div class="strategy-card-header">
                     <div>
-                        <h3 class="strategy-card-name" style="color: ${s.colour}">${s.name}</h3>
-                        ${s.description ? `<p class="strategy-card-desc">${s.description}</p>` : ''}
+                        <h3 class="strategy-card-name" style="color: ${safeColour(s.colour)}">${esc(s.name)}</h3>
+                        ${s.description ? `<p class="strategy-card-desc">${esc(s.description)}</p>` : ''}
                     </div>
                     <div class="strategy-card-actions">
-                        <span class="strategy-trade-count">${s.trade_count} trade${s.trade_count !== 1 ? 's' : ''}</span>
-                        <button class="btn btn-ghost btn-sm" onclick="openStrategyModal('${s.id}')">Edit</button>
-                        <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="confirmDeleteStrategy('${s.id}', '${s.name}')">Delete</button>
+                        <span class="strategy-trade-count">${esc(s.trade_count)} trade${s.trade_count !== 1 ? 's' : ''}</span>
+                        <button class="btn btn-ghost btn-sm" data-action="edit-strategy" data-id="${esc(s.id)}">Edit</button>
+                        <button class="btn btn-ghost btn-sm" style="color:var(--red)" data-action="delete-strategy" data-id="${esc(s.id)}" data-name="${esc(s.name)}">Delete</button>
                     </div>
                 </div>
-                ${s.playbook ? `<div class="strategy-playbook-display"><pre>${escapeHtml(s.playbook)}</pre></div>` : ''}
+                ${s.playbook ? `<div class="strategy-playbook-display"><pre>${esc(s.playbook)}</pre></div>` : ''}
             </div>
         `).join('');
     } catch (err) {
@@ -732,23 +736,24 @@ function openTagPopup(tradeId, cell, currentStrategy) {
 
     const strategies = _strategyCache;
     const options = strategies.map(s =>
-        `<div class="tag-option ${s.name === currentStrategy ? 'active' : ''}" onclick="tagTrade('${tradeId}', '${s.name}')">
-            <span class="tag-dot" style="background:${s.colour}"></span>
-            ${s.name}
+        `<div class="tag-option ${s.name === currentStrategy ? 'active' : ''}" data-action="tag-trade" data-id="${esc(tradeId)}" data-strategy="${esc(s.name)}">
+            <span class="tag-dot" style="background:${safeColour(s.colour)}"></span>
+            ${esc(s.name)}
         </div>`
     ).join('');
 
     const clearOption = currentStrategy
-        ? `<div class="tag-option tag-clear" onclick="tagTrade('${tradeId}', '')">✕ Remove tag</div>`
+        ? `<div class="tag-option tag-clear" data-action="tag-trade" data-id="${esc(tradeId)}" data-strategy="">✕ Remove tag</div>`
         : '';
 
     const noStrategies = strategies.length === 0
-        ? `<div class="tag-empty">No strategies yet.<br><a href="#" onclick="event.preventDefault(); closeTagPopup(); navigateTo('strategies')">Create one</a></div>`
+        ? `<div class="tag-empty">No strategies yet.<br><a href="#" data-action="navigate" data-target="strategies">Create one</a></div>`
         : '';
 
     const popup = document.createElement('div');
     popup.className = 'tag-popup';
     popup.id = 'tag-popup';
+    popup.dataset.action = 'none';  // clicks inside the popup don't reach the row
     popup.innerHTML = `
         <div class="tag-popup-header">Assign Strategy</div>
         ${noStrategies}
@@ -788,11 +793,72 @@ async function tagTrade(tradeId, strategyName) {
     }
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+// ---- Safe HTML ----
+// Every value placed inside an HTML template goes through esc(): it escapes
+// text and attribute contexts (quotes included). Colours only pass as #rrggbb.
+function esc(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
+
+function safeColour(colour) {
+    return /^#[0-9a-fA-F]{6}$/.test(colour || '') ? colour : '#6c9cfc';
+}
+
+// ---- Actions ----
+// No inline onclick/onchange (the page's Content-Security-Policy blocks them).
+// Elements say what they do with data-action / data-change / data-blur; the
+// innermost element with an action handles the event. data-action="none"
+// only stops the click from reaching a parent action (e.g. the trade row).
+const CLICK_ACTIONS = {
+    'none':              () => {},
+    'navigate':          (el, e) => { e.preventDefault(); closeTagPopup(); navigateTo(el.dataset.target); },
+    'open-modal':        (el) => openModal(el.dataset.modal),
+    'close-modal':       (el) => closeModal(el.dataset.modal),
+    'import-strategies': () => importStrategies(),
+    'export-strategies': () => exportStrategies(),
+    'new-strategy':      () => openStrategyModal(),
+    'edit-strategy':     (el) => openStrategyModal(el.dataset.id),
+    'delete-strategy':   (el) => confirmDeleteStrategy(el.dataset.id, el.dataset.name),
+    'download-backup':   () => downloadBackup(),
+    'open-lightbox':     (el) => openLightbox(el.dataset.url),
+    'close-lightbox':    () => closeLightbox(),
+    'open-trade':        (el) => openTradeDetailFromRow(el),
+    'toggle-fills':      (el) => toggleFills(el.dataset.order, el),
+    'tag-popup':         (el) => openTagPopup(el.dataset.id, el, el.dataset.strategy || ''),
+    'tag-trade':         (el) => tagTrade(el.dataset.id, el.dataset.strategy || ''),
+    'delete-screenshot': (el) => deleteScreenshot(el.dataset.id, el.dataset.trade),
+    'sync-exchange':     (el) => syncExchange(el.dataset.id),
+    'remove-exchange':   (el) => removeExchange(el.dataset.id, el.dataset.name),
+    'delete-note':       (el) => deleteNote(el.dataset.id),
+    'close-toast':       (el) => el.closest('.toast')?.remove(),
+};
+
+const CHANGE_ACTIONS = {
+    'upload-screenshot': (el) => uploadScreenshot(el.dataset.id, el.files[0]),
+    'restore-backup':    (el) => restoreBackup(el.files[0]),
+    'note-title':        (el) => updateNote(el.dataset.id, { title: el.value }),
+};
+
+const BLUR_ACTIONS = {
+    'note-content':      (el) => updateNote(el.dataset.id, { content: el.value }),
+};
+
+function _dispatch(table, attr, e) {
+    const el = e.target.closest(`[${attr}]`);
+    if (!el) return;
+    const handler = table[el.getAttribute(attr)];
+    if (handler) handler(el, e);
+}
+
+document.addEventListener('click', e => _dispatch(CLICK_ACTIONS, 'data-action', e));
+document.addEventListener('change', e => _dispatch(CHANGE_ACTIONS, 'data-change', e));
+document.addEventListener('focusout', e => _dispatch(BLUR_ACTIONS, 'data-blur', e));
 
 // ---- Trade Screenshots ----
 async function loadTradeScreenshots(trades) {
@@ -805,15 +871,15 @@ async function loadTradeScreenshots(trades) {
             // Build thumbnails
             const thumbs = screenshots.map(s =>
                 `<div class="ss-thumb-wrap">
-                    <img class="ss-thumb" src="${s.url}" alt="${s.original_name}" onclick="openLightbox('${s.url}')" title="Click to enlarge">
-                    <button class="ss-delete" onclick="event.stopPropagation(); deleteScreenshot('${s.id}', '${t.id}')" title="Remove">✕</button>
+                    <img class="ss-thumb" src="${esc(s.url)}" alt="${esc(s.original_name)}" data-action="open-lightbox" data-url="${esc(s.url)}" title="Click to enlarge">
+                    <button class="ss-delete" data-action="delete-screenshot" data-id="${esc(s.id)}" data-trade="${esc(t.id)}" title="Remove">✕</button>
                 </div>`
             ).join('');
 
             // Show upload button only if under limit (2)
             const uploadBtn = screenshots.length < 2
                 ? `<label class="ss-upload-btn" title="Add chart screenshot">
-                       <input type="file" accept="image/*" style="display:none" onchange="uploadScreenshot('${t.id}', this.files[0])">
+                       <input type="file" accept="image/*" style="display:none" data-change="upload-screenshot" data-id="${esc(t.id)}">
                        +
                    </label>`
                 : '';
@@ -878,24 +944,24 @@ async function loadPatterns() {
             if (p.type === 'streaks' && p.data) {
                 detailHtml = `
                     <div class="pattern-stats">
-                        <span>Best win streak: <strong>${p.data.max_win_streak}</strong></span>
-                        <span>Worst loss streak: <strong>${p.data.max_loss_streak}</strong></span>
-                        <span>Current: <strong>${p.data.current_streak} ${p.data.current_streak_type}${p.data.current_streak > 1 ? 's' : ''}</strong></span>
+                        <span>Best win streak: <strong>${esc(p.data.max_win_streak)}</strong></span>
+                        <span>Worst loss streak: <strong>${esc(p.data.max_loss_streak)}</strong></span>
+                        <span>Current: <strong>${esc(p.data.current_streak)} ${esc(p.data.current_streak_type)}${p.data.current_streak > 1 ? 's' : ''}</strong></span>
                     </div>`;
             } else if (p.type === 'time_of_day' && p.data) {
                 const best = p.data.best_hour;
                 const worst = p.data.worst_hour;
                 detailHtml = `
                     <div class="pattern-stats">
-                        ${best ? `<span>Best hour: <strong>${best.hour}:00 UTC</strong> (${formatCurrency(best.pnl)})</span>` : ''}
-                        ${worst ? `<span>Worst hour: <strong>${worst.hour}:00 UTC</strong> (${formatCurrency(worst.pnl)})</span>` : ''}
+                        ${best ? `<span>Best hour: <strong>${esc(best.hour)}:00 UTC</strong> (${esc(formatCurrency(best.pnl))})</span>` : ''}
+                        ${worst ? `<span>Worst hour: <strong>${esc(worst.hour)}:00 UTC</strong> (${esc(formatCurrency(worst.pnl))})</span>` : ''}
                     </div>`;
             } else if (p.type === 'hold_time' && p.data) {
                 detailHtml = `
                     <div class="pattern-stats">
-                        <span>Average: <strong>${p.data.avg_formatted}</strong></span>
-                        <span>Shortest: <strong>${p.data.shortest.pair}</strong> (${p.data.shortest.duration})</span>
-                        <span>Longest: <strong>${p.data.longest.pair}</strong> (${p.data.longest.duration})</span>
+                        <span>Average: <strong>${esc(p.data.avg_formatted)}</strong></span>
+                        <span>Shortest: <strong>${esc(p.data.shortest.pair)}</strong> (${esc(p.data.shortest.duration)})</span>
+                        <span>Longest: <strong>${esc(p.data.longest.pair)}</strong> (${esc(p.data.longest.duration)})</span>
                     </div>`;
             }
 
@@ -903,9 +969,9 @@ async function loadPatterns() {
             <div class="pattern-card">
                 <div class="pattern-header">
                     <span class="pattern-icon">${icon}</span>
-                    <strong>${p.title}</strong>
+                    <strong>${esc(p.title)}</strong>
                 </div>
-                <p class="pattern-insight">${p.insight}</p>
+                <p class="pattern-insight">${esc(p.insight)}</p>
                 ${detailHtml}
             </div>`;
         }).join('');
@@ -932,13 +998,13 @@ async function loadNotes() {
         }
 
         container.innerHTML = notes.map(n => `
-            <div class="note-card" id="note-${n.id}">
+            <div class="note-card" id="note-${esc(n.id)}">
                 <div class="note-card-header">
-                    <input class="note-title-input" value="${escapeHtml(n.title)}" onchange="updateNote('${n.id}', {title: this.value})">
-                    <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteNote('${n.id}')">Delete</button>
+                    <input class="note-title-input" value="${esc(n.title)}" data-change="note-title" data-id="${esc(n.id)}">
+                    <button class="btn btn-ghost btn-sm" style="color:var(--red)" data-action="delete-note" data-id="${esc(n.id)}">Delete</button>
                 </div>
-                <textarea class="note-content" rows="10" placeholder="Write your notes here..." onblur="updateNote('${n.id}', {content: this.value})">${escapeHtml(n.content)}</textarea>
-                <div class="note-meta">Last updated: ${formatTime(n.updated_at)}</div>
+                <textarea class="note-content" rows="10" placeholder="Write your notes here..." data-blur="note-content" data-id="${esc(n.id)}">${esc(n.content)}</textarea>
+                <div class="note-meta">Last updated: ${esc(formatTime(n.updated_at))}</div>
             </div>
         `).join('');
     } catch (err) {
@@ -1075,14 +1141,14 @@ function openTradeDetail(tradeId, tradeData) {
         const typeBadge = tradeData.trade_type === 'futures' ? '<span class="type-badge futures">PERP</span>' : '';
         info.innerHTML = `
             <div class="detail-grid">
-                <div class="detail-item"><span class="detail-label">Time</span><span class="detail-value mono">${formatTime(tradeData.timestamp)}</span></div>
-                <div class="detail-item"><span class="detail-label">Exchange</span><span class="detail-value">${capitalise(tradeData.exchange)}</span></div>
-                <div class="detail-item"><span class="detail-label">Pair</span><span class="detail-value"><strong>${tradeData.pair}</strong> ${typeBadge}</span></div>
-                <div class="detail-item"><span class="detail-label">Side</span><span class="detail-value side-${tradeData.side}">${tradeData.side.toUpperCase()}</span></div>
-                <div class="detail-item"><span class="detail-label">Quantity</span><span class="detail-value mono">${formatQty(tradeData.quantity)}</span></div>
-                <div class="detail-item"><span class="detail-label">Price</span><span class="detail-value mono">${formatPrice(tradeData.price)}</span></div>
-                <div class="detail-item"><span class="detail-label">Total</span><span class="detail-value mono">${formatCurrency(tradeData.total)}</span></div>
-                <div class="detail-item"><span class="detail-label">Fee</span><span class="detail-value mono">${formatFee(tradeData.fee, tradeData.fee_currency)}</span></div>
+                <div class="detail-item"><span class="detail-label">Time</span><span class="detail-value mono">${esc(formatTime(tradeData.timestamp))}</span></div>
+                <div class="detail-item"><span class="detail-label">Exchange</span><span class="detail-value">${esc(capitalise(tradeData.exchange))}</span></div>
+                <div class="detail-item"><span class="detail-label">Pair</span><span class="detail-value"><strong>${esc(tradeData.pair)}</strong> ${typeBadge}</span></div>
+                <div class="detail-item"><span class="detail-label">Side</span><span class="detail-value ${sideClass(tradeData.side)}">${esc(tradeData.side.toUpperCase())}</span></div>
+                <div class="detail-item"><span class="detail-label">Quantity</span><span class="detail-value mono">${esc(formatQty(tradeData.quantity))}</span></div>
+                <div class="detail-item"><span class="detail-label">Price</span><span class="detail-value mono">${esc(formatPrice(tradeData.price))}</span></div>
+                <div class="detail-item"><span class="detail-label">Total</span><span class="detail-value mono">${esc(formatCurrency(tradeData.total))}</span></div>
+                <div class="detail-item"><span class="detail-label">Fee</span><span class="detail-value mono">${esc(formatFee(tradeData.fee, tradeData.fee_currency))}</span></div>
             </div>`;
     }
 
@@ -1096,7 +1162,7 @@ function openTradeDetail(tradeId, tradeData) {
             const opt = document.createElement('option');
             opt.value = tag.name;
             opt.textContent = tag.name;
-            opt.style.color = tag.colour;
+            opt.style.color = safeColour(tag.colour);
             if (tradeData.emotion_tag === tag.name) opt.selected = true;
             emotionSelect.appendChild(opt);
         });
@@ -1146,8 +1212,8 @@ function showToast(message, type = 'info', duration = 4000) {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.innerHTML = `
-        <span class="toast-msg">${message}</span>
-        <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+        <span class="toast-msg">${esc(message)}</span>
+        <button class="toast-close" data-action="close-toast">✕</button>
     `;
     container.appendChild(toast);
 
