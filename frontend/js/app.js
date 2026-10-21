@@ -115,7 +115,9 @@ async function loadEquityCurve() {
             chart.applyOptions({ width: container.clientWidth });
         }).observe(container);
     } catch (err) {
-        // Non-critical — equity curve is optional
+        console.error('Equity curve could not be drawn:', err);
+        const container = document.getElementById('equity-chart');
+        if (container) container.textContent = 'The equity curve could not be drawn. Reload the page; if it stays empty, check the browser console.';
     }
 }
 

@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trading Journal</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/vendor/fonts/fonts.css">
     <link rel="stylesheet" href="/static/css/app.css">
 </head>
 <body>
@@ -137,6 +136,7 @@
                 <div id="equity-curve-card" style="display: none; margin-top: 1.5rem">
                     <h3 class="card-title">Equity Curve</h3>
                     <div id="equity-chart" style="height: 300px;"></div>
+                    <p class="form-note">Chart by TradingView Lightweight Charts™ · <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">tradingview.com</a></p>
                 </div>
 
                 <!-- Pattern Insights -->
@@ -698,7 +698,7 @@
 
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="/static/vendor/lightweight-charts/lightweight-charts.standalone.production.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
