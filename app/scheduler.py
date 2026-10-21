@@ -58,7 +58,7 @@ def _sync_all_exchanges():
     """Sync trades from all connected exchanges."""
     db = get_db()
     try:
-        rows = db.execute("SELECT id FROM exchanges").fetchall()
+        rows = db.execute("SELECT id FROM exchanges WHERE removed_at IS NULL").fetchall()
     finally:
         db.close()
 

@@ -21,6 +21,8 @@ def sync_exchange(exchange_id: str) -> dict:
         ).fetchone()
         if not row:
             raise ExchangeError(f"Exchange {exchange_id} not found")
+        if row["removed_at"]:
+            raise ExchangeError(f"Exchange {exchange_id} was removed")
 
         db.execute(
             "INSERT INTO sync_log (exchange_id, status) VALUES (?, 'running')",

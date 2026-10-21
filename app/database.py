@@ -4,7 +4,7 @@ import sqlite3
 import uuid
 from app import paths
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 MIGRATIONS = {
     1: """
@@ -156,6 +156,13 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_trades_emotion ON trades(emotion_tag);
 
     PRAGMA user_version = 7;
+    """,
+    8: """
+    -- Removing a connection keeps its trades (they reference it), wipes its
+    -- keys and marks it removed instead of deleting the row.
+    ALTER TABLE exchanges ADD COLUMN removed_at TEXT;
+
+    PRAGMA user_version = 8;
     """,
 }
 

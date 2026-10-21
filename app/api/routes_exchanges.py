@@ -24,6 +24,7 @@ def list_exchanges():
                LEFT JOIN (
                    SELECT exchange_id, COUNT(*) as cnt FROM trades GROUP BY exchange_id
                ) tc ON tc.exchange_id = e.id
+               WHERE e.removed_at IS NULL
                ORDER BY e.created_at DESC"""
         ).fetchall()
         return [
@@ -132,7 +133,7 @@ def trigger_sync(exchange_id: str):
     db = get_db()
     try:
         existing = db.execute(
-            "SELECT id FROM exchanges WHERE id = ?", [exchange_id]
+            "SELECT id FROM exchanges WHERE id = ? AND removed_at IS NULL", [exchange_id]
         ).fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Exchange not found")
@@ -152,7 +153,11 @@ def trigger_sync(exchange_id: str):
 
 @router.delete("/exchanges/{exchange_id}")
 def remove_exchange(exchange_id: str, confirm: bool = False):
-    """Remove an exchange connection. Requires confirm=true. Keeps trade data."""
+    """Remove an exchange connection. Requires confirm=true.
+
+    Its API keys are wiped for good and it disappears from the app; its trades
+    are kept (they still reference the connection, so the row stays, marked removed).
+    """
     if not confirm:
         raise HTTPException(
             status_code=400,
@@ -161,13 +166,19 @@ def remove_exchange(exchange_id: str, confirm: bool = False):
     db = get_db()
     try:
         existing = db.execute(
-            "SELECT * FROM exchanges WHERE id = ?", [exchange_id]
+            "SELECT * FROM exchanges WHERE id = ? AND removed_at IS NULL", [exchange_id]
         ).fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Exchange not found")
 
         db.execute("DELETE FROM tracked_pairs WHERE exchange_id = ?", [exchange_id])
-        db.execute("DELETE FROM exchanges WHERE id = ?", [exchange_id])
+        db.execute(
+            """UPDATE exchanges
+               SET api_key_enc = '', api_secret_enc = '', passphrase_enc = NULL,
+                   removed_at = ?
+               WHERE id = ?""",
+            [datetime.now(timezone.utc).isoformat(), exchange_id],
+        )
         db.commit()
         return {"status": "removed", "exchange_id": exchange_id}
     finally:
