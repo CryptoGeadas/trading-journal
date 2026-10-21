@@ -17,17 +17,20 @@ A self-hosted crypto trading journal that connects to your exchange accounts, sy
 
 ```bash
 cd trading-journal
-pip install fastapi uvicorn pydantic python-multipart ccxt apscheduler cryptography openpyxl
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+python -m venv .venv
+.venv/bin/pip install -e .          # Windows: .venv\Scripts\pip install -e .
+.venv/bin/python -m app             # Windows: .venv\Scripts\python -m app
 ```
 
-Open **http://localhost:8000** in your browser.
+`python -m app` starts the journal and opens **http://127.0.0.1:8000** in your browser when it is ready (add `--no-browser` to skip that). Only your own computer can open it.
 
 ### Docker (alternative)
 
 ```bash
 docker-compose up --build
 ```
+
+Compose publishes the port on `127.0.0.1` only. With plain `docker run`, use `-p 127.0.0.1:8000:8000`.
 
 ### Configuration
 
@@ -39,7 +42,7 @@ cp .env.example .env
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HOST` | `0.0.0.0` | Server bind address |
+| `HOST` | `127.0.0.1` | Who can open the journal. `127.0.0.1` = only this computer. `0.0.0.0` makes it reachable from your whole network (a warning is shown; set `AUTH_USER`/`AUTH_PASS` too) |
 | `PORT` | `8000` | Server port |
 | `SYNC_INTERVAL_HOURS` | `6` | How often to pull new trades from exchanges |
 | `DEFAULT_QUOTE_CURRENCY` | `USDT` | Default quote currency for display |

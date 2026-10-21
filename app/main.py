@@ -86,6 +86,11 @@ app.include_router(emotion_tags_router, prefix="/api")
 
 # --- Static frontend ---
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+if not FRONTEND_DIR.is_dir():
+    raise RuntimeError(
+        f"Frontend folder not found at {FRONTEND_DIR}. Run the journal from the repo folder "
+        "with `python -m app` (install with `pip install -e .`, not `pip install .`)."
+    )
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 

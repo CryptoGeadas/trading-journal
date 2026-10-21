@@ -17,5 +17,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
 
-[project.scripts]
-journal = "app.main:app"
+# Installs the dependencies; the journal itself runs from the repo folder
+# (`python -m app`), which also holds the frontend it serves.
+[tool.setuptools.packages.find]
+include = ["app*"]

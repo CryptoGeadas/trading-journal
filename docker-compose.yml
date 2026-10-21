@@ -2,12 +2,11 @@ services:
   journal:
     build: .
     ports:
-      - "8000:8000"
+      # 127.0.0.1 = only this computer can open the journal
+      - "127.0.0.1:8000:8000"
     volumes:
       - journal-data:/data
     environment:
-      - HOST=0.0.0.0
-      - PORT=8000
       - SYNC_INTERVAL_HOURS=6
       - DEFAULT_QUOTE_CURRENCY=USDT
       - DEFAULT_PNL_METHOD=fifo

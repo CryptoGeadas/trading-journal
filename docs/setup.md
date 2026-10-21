@@ -21,13 +21,10 @@ docker-compose up --build
 
 ```bash
 # 1. Requires Python 3.11+
-python -m pip install .
+python -m pip install -e .
 
-# 2. Start the server
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-# 3. Open your browser:
-#    http://localhost:8000
+# 2. Start the journal (opens http://127.0.0.1:8000 in your browser)
+python -m app
 ```
 
 ## Project Status
