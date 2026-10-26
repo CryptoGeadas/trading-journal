@@ -11,6 +11,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 from app import paths
 from app.database import get_db
+from app.services.pnl_engine import TradeFilter
 
 router = APIRouter()
 
@@ -47,35 +48,7 @@ def _query_grouped_trades(
     """Query trades grouped by order, applying filters."""
     db = get_db()
     try:
-        conditions = []
-        params = []
-
-        if exchange:
-            conditions.append("exchange = ?")
-            params.append(exchange)
-        if pair:
-            conditions.append("pair = ?")
-            params.append(pair)
-        if side:
-            conditions.append("side = ?")
-            params.append(side)
-        if trade_type:
-            conditions.append("trade_type = ?")
-            params.append(trade_type)
-        if strategy:
-            if strategy == "__untagged__":
-                conditions.append("strategy IS NULL")
-            else:
-                conditions.append("strategy = ?")
-                params.append(strategy)
-        if date_from:
-            conditions.append("timestamp >= ?")
-            params.append(date_from)
-        if date_to:
-            conditions.append("timestamp <= ?")
-            params.append(date_to)
-
-        where = " WHERE " + " AND ".join(conditions) if conditions else ""
+        where, params = TradeFilter(exchange, pair, trade_type, strategy, date_from, date_to).sql(side=side)
         group_key = "COALESCE(order_id, id)"
 
         query = f"""

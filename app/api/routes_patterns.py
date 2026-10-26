@@ -4,7 +4,10 @@ from collections import defaultdict
 from datetime import datetime
 
 from fastapi import APIRouter
+from app.api.routes_pnl import load_fills
 from app.database import get_db
+from app.services import pnl_engine
+from app.services.pnl_engine import ClosedTrade
 
 router = APIRouter()
 
@@ -14,82 +17,24 @@ async def detect_patterns():
     """Analyse trading patterns: streaks, time-of-day, hold times."""
     db = get_db()
     try:
-        patterns = []
-
-        # ---- Winning/Losing Streaks ----
-        streak_data = _detect_streaks(db)
-        if streak_data:
-            patterns.append(streak_data)
-
-        # ---- Time of Day Analysis ----
-        tod_data = _time_of_day_analysis(db)
-        if tod_data:
-            patterns.append(tod_data)
-
-        # ---- Average Hold Time ----
-        hold_data = _avg_hold_time(db)
-        if hold_data:
-            patterns.append(hold_data)
-
-        return {"patterns": patterns}
+        closed = pnl_engine.match(load_fills(db)).closed
     finally:
         db.close()
 
+    patterns = []
+    for detect in (_detect_streaks, _time_of_day_analysis, _avg_hold_time):
+        data = detect(closed)
+        if data:
+            patterns.append(data)
+    return {"patterns": patterns}
 
-def _detect_streaks(db) -> dict | None:
+
+def _detect_streaks(closed: list[ClosedTrade]) -> dict | None:
     """Find winning and losing streaks based on closed round-trip trades."""
-    # Get all sells with their cost basis (simplified: pair-level)
-    rows = db.execute(
-        """SELECT pair, side, timestamp, quantity, price, total, fee
-           FROM trades
-           ORDER BY pair, timestamp ASC"""
-    ).fetchall()
-
-    if not rows:
-        return None
-
-    # FIFO per pair to determine win/loss per sell
-    from collections import deque
-    buy_queues = defaultdict(deque)
-    results = []  # list of (timestamp, pnl)
-
-    for r in rows:
-        pair = r["pair"]
-        if r["side"] == "buy":
-            buy_queues[pair].append({
-                "qty": float(r["quantity"]),
-                "price": float(r["price"]),
-                "fee_per_unit": float(r["fee"]) / max(float(r["quantity"]), 0.00000001),
-            })
-        elif r["side"] == "sell":
-            sell_qty = float(r["quantity"])
-            sell_price = float(r["price"])
-            sell_fee = float(r["fee"])
-            cost_basis = 0.0
-            buy_fees = 0.0
-            remaining = sell_qty
-
-            queue = buy_queues[pair]
-            while remaining > 0 and queue:
-                lot = queue[0]
-                match_qty = min(remaining, lot["qty"])
-                cost_basis += match_qty * lot["price"]
-                buy_fees += match_qty * lot["fee_per_unit"]
-                lot["qty"] -= match_qty
-                remaining -= match_qty
-                if lot["qty"] <= 0.00000001:
-                    queue.popleft()
-
-            if cost_basis > 0:
-                pnl = sell_qty * sell_price - cost_basis - buy_fees - sell_fee
-                results.append({"timestamp": r["timestamp"], "pnl": pnl, "pair": pair})
-
+    results = [{"timestamp": t.close_time, "pnl": t.pnl, "pair": t.pair} for t in closed]
     if len(results) < 2:
         return None
 
-    # Find streaks
-    current_streak = 0
-    current_type = None
     max_win_streak = 0
     max_loss_streak = 0
     current_win = 0
@@ -105,16 +50,14 @@ def _detect_streaks(db) -> dict | None:
             current_win = 0
             max_loss_streak = max(max_loss_streak, current_loss)
 
-    # Current streak
-    if results:
-        last_type = "win" if results[-1]["pnl"] >= 0 else "loss"
-        current_count = 1
-        for i in range(len(results) - 2, -1, -1):
-            this_type = "win" if results[i]["pnl"] >= 0 else "loss"
-            if this_type == last_type:
-                current_count += 1
-            else:
-                break
+    last_type = "win" if results[-1]["pnl"] >= 0 else "loss"
+    current_count = 1
+    for i in range(len(results) - 2, -1, -1):
+        this_type = "win" if results[i]["pnl"] >= 0 else "loss"
+        if this_type == last_type:
+            current_count += 1
+        else:
+            break
 
     return {
         "type": "streaks",
@@ -143,58 +86,18 @@ def _streak_insight(max_win, max_loss, current, current_type):
     return " ".join(parts)
 
 
-def _time_of_day_analysis(db) -> dict | None:
-    """Analyse performance by hour of day."""
-    rows = db.execute(
-        """SELECT pair, side, timestamp, quantity, price, total, fee
-           FROM trades
-           ORDER BY pair, timestamp ASC"""
-    ).fetchall()
-
-    if not rows:
-        return None
-
-    # FIFO to get PnL per sell, then bucket by hour
-    from collections import deque
-    buy_queues = defaultdict(deque)
+def _time_of_day_analysis(closed: list[ClosedTrade]) -> dict | None:
+    """Analyse performance by hour of day (hour the trade was closed)."""
     hourly = defaultdict(lambda: {"count": 0, "pnl": 0.0, "wins": 0})
-
-    for r in rows:
-        pair = r["pair"]
-        if r["side"] == "buy":
-            buy_queues[pair].append({
-                "qty": float(r["quantity"]),
-                "price": float(r["price"]),
-                "fee_per_unit": float(r["fee"]) / max(float(r["quantity"]), 0.00000001),
-            })
-        elif r["side"] == "sell":
-            sell_qty = float(r["quantity"])
-            cost_basis = 0.0
-            buy_fees = 0.0
-            remaining = sell_qty
-
-            queue = buy_queues[pair]
-            while remaining > 0 and queue:
-                lot = queue[0]
-                match_qty = min(remaining, lot["qty"])
-                cost_basis += match_qty * lot["price"]
-                buy_fees += match_qty * lot["fee_per_unit"]
-                lot["qty"] -= match_qty
-                remaining -= match_qty
-                if lot["qty"] <= 0.00000001:
-                    queue.popleft()
-
-            if cost_basis > 0:
-                pnl = sell_qty * float(r["price"]) - cost_basis - buy_fees - float(r["fee"])
-                try:
-                    hour = datetime.fromisoformat(r["timestamp"].replace("Z", "+00:00")).hour
-                except Exception:
-                    continue
-
-                hourly[hour]["count"] += 1
-                hourly[hour]["pnl"] += pnl
-                if pnl >= 0:
-                    hourly[hour]["wins"] += 1
+    for t in closed:
+        try:
+            hour = datetime.fromisoformat(t.close_time.replace("Z", "+00:00")).hour
+        except ValueError:
+            continue
+        hourly[hour]["count"] += 1
+        hourly[hour]["pnl"] += t.pnl
+        if t.pnl >= 0:
+            hourly[hour]["wins"] += 1
 
     if not hourly:
         return None
@@ -234,40 +137,18 @@ def _tod_insight(best, worst, hours_list):
     return " ".join(parts)
 
 
-def _avg_hold_time(db) -> dict | None:
-    """Calculate average time between buy and sell for each pair."""
-    rows = db.execute(
-        """SELECT pair, side, timestamp
-           FROM trades
-           ORDER BY pair, timestamp ASC"""
-    ).fetchall()
-
-    if not rows:
-        return None
-
-    # Track first buy → first sell per position per pair
+def _avg_hold_time(closed: list[ClosedTrade]) -> dict | None:
+    """Average time from the first matched buy to the sale."""
     hold_times = []
-    pair_buys = defaultdict(list)
-
-    for r in rows:
-        pair = r["pair"]
-        ts = r["timestamp"]
+    for t in closed:
         try:
-            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        except Exception:
+            opened = datetime.fromisoformat(t.open_time.replace("Z", "+00:00"))
+            closed_at = datetime.fromisoformat(t.close_time.replace("Z", "+00:00"))
+        except ValueError:
             continue
-
-        if r["side"] == "buy":
-            pair_buys[pair].append(dt)
-        elif r["side"] == "sell" and pair_buys[pair]:
-            entry_time = pair_buys[pair][0]  # FIFO — match with oldest buy
-            pair_buys[pair].pop(0)
-            hold_seconds = (dt - entry_time).total_seconds()
-            if hold_seconds >= 0:
-                hold_times.append({
-                    "pair": pair,
-                    "seconds": hold_seconds,
-                })
+        hold_seconds = (closed_at - opened).total_seconds()
+        if hold_seconds >= 0:
+            hold_times.append({"pair": t.pair, "seconds": hold_seconds})
 
     if not hold_times:
         return None

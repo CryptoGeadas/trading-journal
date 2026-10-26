@@ -204,7 +204,6 @@ def test_equity_curve_ends_at_the_total_pnl(api):
     assert curve[-1]["cumulative_pnl"] == pnl(api)["total_pnl"]
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="wrong today, see #24")
 @pytest.mark.parametrize("group_by", ["exchange", "strategy"])
 def test_breakdown_adds_up_to_the_total_when_buy_and_sell_are_in_different_groups(api, group_by):
     # bought on exchange a / with strategy "Swing", sold on exchange b / with "Scalp"
@@ -215,7 +214,6 @@ def test_breakdown_adds_up_to_the_total_when_buy_and_sell_are_in_different_group
     assert sum(g["total_pnl"] for g in r["breakdown"]) == 50
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="wrong today, see #25")
 def test_date_filter_keeps_the_cost_of_earlier_buys(api):
     add(api, "buy", 1, 100, "2026-01-01T00:00:00Z")
     add(api, "sell", 1, 150, "2026-01-31T00:00:00Z")
@@ -236,3 +234,27 @@ def test_time_zones_are_compared_as_real_moments(api):
     # 01:00 at UTC+2 is 23:00 UTC the day BEFORE the buy: nothing to sell yet
     add(api, "sell", 1, 150, "2026-01-01T01:00:00+02:00")
     assert pnl(api)["total_pnl"] == 0
+
+
+@pytest.mark.parametrize("group_by", ["pair", "exchange", "strategy", "emotion_tag", "month", "week"])
+def test_every_breakdown_adds_up_to_the_total(api, group_by):
+    add(api, "buy", 2, 100, "2026-01-01T00:00:00Z", exchange="a", strategy="Swing")
+    add(api, "sell", 1, 130, "2026-01-20T00:00:00Z", exchange="b")
+    add(api, "buy", 1, 50, "2026-02-01T00:00:00Z", pair="ETH/USDT", exchange="a", fee=1)
+    add(api, "sell", 1, 40, "2026-02-09T00:00:00Z", pair="ETH/USDT", exchange="a", strategy="Scalp", fee=1)
+    add(api, "sell", 1, 90, "2026-03-01T00:00:00Z", exchange="a", strategy="Swing")
+    r = pnl(api, group_by=group_by)
+    assert r["total_pnl"] == 8  # +30, -12, -10
+    assert sum(g["total_pnl"] for g in r["breakdown"]) == pytest.approx(r["total_pnl"])
+    assert sum(g["trade_count"] for g in r["breakdown"]) == r["trade_count"]
+
+
+def test_patterns_use_the_same_closed_trades_as_pnl(api):
+    add(api, "buy", 3, 100, "2026-01-01T09:00:00Z")
+    add(api, "sell", 1, 130, "2026-01-02T10:00:00Z")
+    add(api, "sell", 1, 110, "2026-01-03T10:00:00Z")
+    add(api, "sell", 1, 80, "2026-01-04T15:00:00Z")
+    patterns = {p["type"]: p["data"] for p in api.get("/api/patterns").json()["patterns"]}
+    assert patterns["streaks"]["total_closed_trades"] == pnl(api)["trade_count"] == 3
+    assert sum(h["pnl"] for h in patterns["time_of_day"]["by_hour"]) == pnl(api)["total_pnl"]
+    assert patterns["hold_time"]["total_round_trips"] == 3

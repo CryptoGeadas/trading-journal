@@ -3,6 +3,7 @@
 from typing import Optional
 from fastapi import APIRouter, Query
 from app.database import get_db
+from app.services.pnl_engine import TradeFilter
 
 router = APIRouter()
 
@@ -18,20 +19,7 @@ async def list_funding_fees(
     """List funding fees with optional filtering."""
     db = get_db()
     try:
-        conditions = []
-        params = []
-
-        if pair:
-            conditions.append("pair = ?")
-            params.append(pair)
-        if date_from:
-            conditions.append("timestamp >= ?")
-            params.append(date_from)
-        if date_to:
-            conditions.append("timestamp <= ?")
-            params.append(date_to)
-
-        where = " WHERE " + " AND ".join(conditions) if conditions else ""
+        where, params = TradeFilter(pair=pair, date_from=date_from, date_to=date_to).sql()
 
         total = db.execute(f"SELECT COUNT(*) FROM funding_fees{where}", params).fetchone()[0]
 
@@ -62,16 +50,7 @@ async def funding_fees_summary(
     """Summary of funding fees — total paid/received per pair."""
     db = get_db()
     try:
-        conditions = []
-        params = []
-        if date_from:
-            conditions.append("timestamp >= ?")
-            params.append(date_from)
-        if date_to:
-            conditions.append("timestamp <= ?")
-            params.append(date_to)
-
-        where = " WHERE " + " AND ".join(conditions) if conditions else ""
+        where, params = TradeFilter(date_from=date_from, date_to=date_to).sql()
 
         rows = db.execute(
             f"""SELECT pair,

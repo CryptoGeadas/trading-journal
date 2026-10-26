@@ -1,10 +1,31 @@
 """Tests for the FIFO PnL matching engine."""
 
-from app.api.routes_pnl import _fifo_match
+from itertools import count
+
+from app.services import pnl_engine
+
+_clock = count()
 
 
 def _trade(side, qty, price, fee=0.0):
-    return {"side": side, "quantity": qty, "price": price, "fee": fee}
+    return {"side": side, "quantity": qty, "price": price, "fee": fee, "pair": "BTC/USDT",
+            "trade_type": "spot", "exchange": "x", "timestamp": f"2026-01-01T00:00:{next(_clock):02d}Z"}
+
+
+def _fifo_match(pair, trades):
+    """Old result shape, built from the engine, so these tests read as before."""
+    result = pnl_engine.match(trades)
+    s = pnl_engine.summarise(result.closed)
+    return {
+        "realised_pnl": s["total_pnl"],
+        "total_fees": s["total_fees"],
+        "closed_trades": s["trade_count"],
+        "wins": s["wins"],
+        "losses": s["losses"],
+        "total_win_amount": s["win_amount"],
+        "total_loss_amount": s["loss_amount"],
+        "open_qty": sum(lot.quantity for lot in result.open_lots),
+    }
 
 
 class TestFifoMatch:

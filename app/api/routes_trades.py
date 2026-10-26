@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
 from app.database import get_db
+from app.services.pnl_engine import TradeFilter
 from app.models import TradeOut, TradeUpdate, TradesPage, OrderOut, OrdersPage
 
 router = APIRouter()
@@ -28,36 +29,7 @@ class ManualTradeCreate(BaseModel):
 
 def _build_where(exchange, pair, side, strategy, date_from, date_to, trade_type=None):
     """Build WHERE clause and params from filter values."""
-    conditions = []
-    params = []
-
-    if exchange:
-        conditions.append("exchange = ?")
-        params.append(exchange)
-    if pair:
-        conditions.append("pair = ?")
-        params.append(pair)
-    if side:
-        conditions.append("side = ?")
-        params.append(side)
-    if trade_type:
-        conditions.append("trade_type = ?")
-        params.append(trade_type)
-    if strategy:
-        if strategy == "__untagged__":
-            conditions.append("strategy IS NULL")
-        else:
-            conditions.append("strategy = ?")
-            params.append(strategy)
-    if date_from:
-        conditions.append("timestamp >= ?")
-        params.append(date_from)
-    if date_to:
-        conditions.append("timestamp <= ?")
-        params.append(date_to)
-
-    where = " WHERE " + " AND ".join(conditions) if conditions else ""
-    return where, params
+    return TradeFilter(exchange, pair, trade_type, strategy, date_from, date_to).sql(side=side)
 
 
 @router.get("/trades", response_model=OrdersPage)
