@@ -77,9 +77,11 @@ def create_strategy(body: StrategyCreate):
     """Create a new strategy."""
     db = get_db()
     try:
-        # Check for duplicate name
+        name = body.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="The name cannot be empty.")
         existing = db.execute(
-            "SELECT id FROM strategies WHERE LOWER(name) = LOWER(?)", [body.name]
+            "SELECT id FROM strategies WHERE LOWER(name) = LOWER(?)", [name]
         ).fetchone()
         if existing:
             raise HTTPException(status_code=409, detail="A strategy with this name already exists.")
@@ -120,7 +122,16 @@ def update_strategy(strategy_id: str, body: StrategyUpdate):
         old_name = existing["name"]
         updates = {}
         if body.name is not None:
-            updates["name"] = body.name.strip()
+            name = body.name.strip()
+            if not name:
+                raise HTTPException(status_code=400, detail="The name cannot be empty.")
+            # Same rule as create: names are unique, ignoring case.
+            clash = db.execute(
+                "SELECT id FROM strategies WHERE LOWER(name) = LOWER(?) AND id != ?", [name, strategy_id]
+            ).fetchone()
+            if clash:
+                raise HTTPException(status_code=409, detail="A strategy with this name already exists.")
+            updates["name"] = name
         if body.description is not None:
             updates["description"] = body.description
         if body.colour is not None:

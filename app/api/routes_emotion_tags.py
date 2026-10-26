@@ -72,8 +72,11 @@ def create_emotion_tag(body: EmotionTagCreate):
     """Create a new emotion tag."""
     db = get_db()
     try:
+        name = body.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="The name cannot be empty.")
         existing = db.execute(
-            "SELECT id FROM emotion_tags WHERE LOWER(name) = LOWER(?)", [body.name]
+            "SELECT id FROM emotion_tags WHERE LOWER(name) = LOWER(?)", [name]
         ).fetchone()
         if existing:
             raise HTTPException(status_code=409, detail="An emotion tag with this name already exists.")
@@ -111,7 +114,16 @@ def update_emotion_tag(tag_id: str, body: EmotionTagUpdate):
         old_name = existing["name"]
         updates = {}
         if body.name is not None:
-            updates["name"] = body.name.strip()
+            name = body.name.strip()
+            if not name:
+                raise HTTPException(status_code=400, detail="The name cannot be empty.")
+            # Same rule as create: names are unique, ignoring case.
+            clash = db.execute(
+                "SELECT id FROM emotion_tags WHERE LOWER(name) = LOWER(?) AND id != ?", [name, tag_id]
+            ).fetchone()
+            if clash:
+                raise HTTPException(status_code=409, detail="A tag with this name already exists.")
+            updates["name"] = name
         if body.colour is not None:
             updates["colour"] = body.colour
 

@@ -4,7 +4,7 @@ import sqlite3
 import uuid
 from app import paths
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 14
 
 MIGRATIONS = {
     1: """
@@ -165,7 +165,61 @@ MIGRATIONS = {
     PRAGMA user_version = 8;
     """,
     # 9: every trade and funding time in one UTC format (Python step below).
-    9: "PRAGMA user_version = 9;",
+    9: "SELECT 1;",  # the Python step sets user_version = 9 when it has finished
+    10: """
+    -- Synced futures fills were stored under the spot pair name (BTC/USDT).
+    -- Give them their futures name (BTC/USDT:USDT), the same for funding
+    -- payments, and keep those futures pairs tracked for the next sync.
+    UPDATE trades SET pair = pair || ':' || quote_currency
+     WHERE trade_type = 'futures' AND instr(pair, ':') = 0 AND quote_currency != '';
+    UPDATE OR IGNORE funding_fees SET pair = pair || ':' || substr(pair, instr(pair, '/') + 1)
+     WHERE instr(pair, ':') = 0 AND instr(pair, '/') > 0;
+    -- A row the rename skipped already exists under the new name: drop the old copy.
+    DELETE FROM funding_fees
+     WHERE instr(pair, ':') = 0 AND instr(pair, '/') > 0
+       AND EXISTS (SELECT 1 FROM funding_fees f2
+                    WHERE f2.exchange_id = funding_fees.exchange_id AND f2.timestamp = funding_fees.timestamp
+                      AND f2.pair = funding_fees.pair || ':' || substr(funding_fees.pair, instr(funding_fees.pair, '/') + 1));
+    INSERT OR IGNORE INTO tracked_pairs (exchange_id, pair)
+     SELECT DISTINCT t.exchange_id, t.pair FROM trades t JOIN exchanges e ON e.id = t.exchange_id
+      WHERE t.trade_type = 'futures' AND e.id NOT LIKE 'manual_%';
+
+    PRAGMA user_version = 10;
+    """,
+    11: """
+    -- Manual trades need an exchanges row (trades reference it), but it is
+    -- not a connection: never synced, counted or listed as one.
+    ALTER TABLE exchanges ADD COLUMN is_manual INTEGER NOT NULL DEFAULT 0;
+    UPDATE exchanges SET is_manual = 1 WHERE substr(id, 1, 7) = 'manual_' AND api_key_enc = '';
+
+    PRAGMA user_version = 11;
+    """,
+    12: """
+    -- Kept when a connection is removed (the key itself is wiped), so adding
+    -- the same key again reconnects the old connection instead of importing
+    -- its trades a second time.
+    ALTER TABLE exchanges ADD COLUMN api_key_fingerprint TEXT;
+
+    PRAGMA user_version = 12;
+    """,
+    13: """
+    -- When each pair was last fetched completely (ms). The next sync starts
+    -- there, so a quiet pair is not fetched again from the start date.
+    ALTER TABLE tracked_pairs ADD COLUMN checked_until INTEGER;
+    -- Manual futures typed as BTC/USDT:USDT were stored with quote 'USDT:USDT'.
+    UPDATE trades SET quote_currency = substr(quote_currency, 1, instr(quote_currency, ':') - 1)
+     WHERE instr(quote_currency, ':') > 0;
+
+    PRAGMA user_version = 13;
+    """,
+    14: """
+    -- Demo data is marked where it comes from, so it can be removed in one go.
+    ALTER TABLE exchanges ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE strategies ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE notes ADD COLUMN is_demo INTEGER NOT NULL DEFAULT 0;
+
+    PRAGMA user_version = 14;
+    """,
 }
 
 
@@ -188,6 +242,7 @@ def _normalise_timestamps(conn: sqlite3.Connection):
             except sqlite3.IntegrityError:
                 # Same payment stored twice in two formats: keep one.
                 conn.execute(f"DELETE FROM {table} WHERE id = ?", [row_id])
+    conn.execute("PRAGMA user_version = 9")
     conn.commit()
 
 

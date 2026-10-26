@@ -34,7 +34,7 @@ Compose publishes the port on `127.0.0.1` only. With plain `docker run`, use `-p
 
 ### Configuration
 
-Copy `.env.example` to `.env` and adjust as needed:
+Copy `.env.example` to `.env` and adjust as needed. The app reads `.env` from the repo folder when it starts (Docker Compose reads it too). A real environment variable with the same name wins over `.env`.
 
 ```bash
 cp .env.example .env
@@ -58,7 +58,7 @@ cp .env.example .env
 ### Exchange Connectivity
 - Connect to **Binance** (spot + futures), **Gate.io** (spot), and **Kraken** (spot) with API keys
 - **Adapter-based sync engine**: each exchange has its own adapter handling exchange-specific quirks, with a shared orchestrator
-- **Permission validation**: hard-blocks keys with withdrawal or transfer permissions. Allows futures/spot trading permissions with a warning (Binance requires these for reading futures trade history; the app contains no order-placement code)
+- **Permission validation (Binance only)**: on Binance, keys with withdrawal or transfer permissions are refused, and so is a key whose permissions Binance does not report. Gate.io and Kraken have no API that reports a key's permissions, so the app cannot check them: use a read-only key. Trading permissions are allowed with a warning (Binance requires "Enable Futures" for reading futures trade history; the app contains no order-placement code)
 - API credentials encrypted at rest (Fernet symmetric encryption)
 - Automatic sync every 6 hours + manual "Sync Now" button
 - **Per-exchange sync start date**: choose how far back to pull trades when connecting an exchange
@@ -116,7 +116,7 @@ cp .env.example .env
 
 ### Hardening
 - **Optional basic auth**: set `AUTH_USER` and `AUTH_PASS` in `.env` to protect the dashboard with HTTP Basic Authentication
-- **Backup/restore**: one-click download of a ZIP containing database, screenshots, and extra_pairs.txt. Restore from any backup file
+- **Backup/restore**: one-click download of a ZIP containing the database, the encryption key, screenshots, and extra_pairs.txt, so exchange keys still work after a restore on another computer. **Keep backup files private**: the key inside unlocks your saved API keys. Restore from any backup file
 - **Daily auto-backup**: the scheduler automatically saves a backup every 24 hours to the `backups/` folder in your data folder, keeping the most recent backups (configurable via `BACKUP_RETENTION_COUNT`)
 - **Toast notifications**: all confirmations and errors shown as slide-in toasts (no browser alert popups)
 - **Stale data warnings**: overview page and exchange cards flag when sync is overdue (>24 hours)
@@ -134,8 +134,8 @@ cp .env.example .env
    - ☑ Enable Futures (required for futures trade history — this also grants trade capability, but the app never places orders)
 4. Permissions to **disable**:
    - ☐ Enable Spot & Margin Trading (not needed for spot read access)
-   - ☐ Enable Withdrawals (hard-blocked by the app)
-   - ☐ Enable Internal Transfer (hard-blocked by the app)
+   - ☐ Enable Withdrawals (the app refuses keys that have it)
+   - ☐ Enable Internal Transfer (the app refuses keys that have it)
 5. Copy the API Key and Secret
 
 ### Gate.io
@@ -143,7 +143,7 @@ cp .env.example .env
 1. Go to **API Key Management** in your Gate.io account settings
 2. Create a new **API v4 Key**
 3. Enable **Spot Trade** with **Read Only** selected
-4. Leave all other permissions off
+4. Leave all other permissions off. **The app cannot check this on Gate.io**, so make sure withdrawals are off.
 5. Copy the API Key, Secret, and Passphrase
 
 ### Kraken
@@ -151,7 +151,7 @@ cp .env.example .env
 1. Go to **Settings > API** in your Kraken account
 2. Create a new API key
 3. Enable **Query Funds** and **Query Open Orders & Trades** permissions
-4. Leave all other permissions off
+4. Leave all other permissions off. **The app cannot check this on Kraken**, so make sure "Withdraw Funds" is off.
 5. Copy the API Key and Private Key
 
 ---
@@ -164,9 +164,13 @@ The app uses a two-layer security model:
 
 1. **Code-level protection** (primary): The codebase contains **no functions** that can place, modify, or cancel orders. Even if an API key has trading permissions, the app physically cannot use them.
 
-2. **Permission validation** (secondary): When connecting an exchange, the app checks the API key's permissions:
-   - **Hard-blocked**: Withdrawal and Transfer permissions are rejected outright — these are never needed for a trading journal
-   - **Allowed with warning**: Futures and Spot trading permissions are accepted because Binance requires them for reading futures trade history. A warning is logged noting the key has this capability
+2. **Permission validation** (secondary), what each exchange really allows:
+
+   | Exchange | What the app checks |
+   |----------|---------------------|
+   | Binance | Reads the key's permissions. Withdrawal or Transfer enabled → refused. Permissions not reported (or the call fails) → refused. Trading permissions → accepted with a warning (needed for futures history). |
+   | Gate.io | Only that the key can read balances. Gate.io has no API that reports a key's permissions, so a key that can withdraw is **not** blocked. The form and a warning after connecting say so. |
+   | Kraken | Same as Gate.io: read access only, withdrawal permission cannot be checked. |
 
 ### Data Safety
 
@@ -175,7 +179,8 @@ The app uses a two-layer security model:
 - **API keys encrypted at rest** — Fernet encryption, key stored in `.encryption_key` in your data folder
 - **Strategy & emotion tag backup** — export/import as JSON to protect against database resets
 - **Extra pairs file** — `extra_pairs.txt` in your data folder survives database resets (add fully-sold pairs here)
-- **Full backup/restore** — download everything as a ZIP from the Settings page
+- **Full backup/restore** — download everything as a ZIP from the Settings page (includes the encryption key: treat the file like a password)
+- **Key file guard** — if `.encryption_key` goes missing while exchange keys are saved, the app stops with a clear message instead of making a new key that would lock those keys for good
 - **Auto-backup** — daily snapshots with automatic rotation
 
 ### GitHub Safety

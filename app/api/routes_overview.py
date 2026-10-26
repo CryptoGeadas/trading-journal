@@ -26,11 +26,13 @@ async def get_overview(
         ).fetchone()[0]
 
         # Connected exchanges
-        connected = db.execute("SELECT COUNT(*) FROM exchanges WHERE removed_at IS NULL").fetchone()[0]
+        connected = db.execute(
+            "SELECT COUNT(*) FROM exchanges WHERE removed_at IS NULL AND is_manual = 0 AND is_demo = 0"
+        ).fetchone()[0]
 
         # Last sync across all exchanges
         last_sync_row = db.execute(
-            "SELECT MAX(last_sync_at) FROM exchanges WHERE removed_at IS NULL"
+            "SELECT MAX(last_sync_at) FROM exchanges WHERE removed_at IS NULL AND is_manual = 0 AND is_demo = 0"
         ).fetchone()
         last_sync = last_sync_row[0] if last_sync_row else None
 

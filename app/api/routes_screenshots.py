@@ -1,7 +1,7 @@
 """Screenshot endpoints — upload, serve, and delete trade screenshots."""
 
+import re
 import uuid
-import shutil
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -13,6 +13,22 @@ from app.database import get_db
 router = APIRouter()
 
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+# A stored file name: letters, digits, - and _ and an image extension. No dots
+# or slashes before it, so a name can never point outside the folder.
+STORED_NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}\.(png|jpg|jpeg|webp|gif)$")
+
+
+def _is_image(contents: bytes, ext: str) -> bool:
+    """The first bytes must match the extension (a renamed file is refused)."""
+    if ext == ".png":
+        return contents.startswith(b"\x89PNG\r\n\x1a\n")
+    if ext in (".jpg", ".jpeg"):
+        return contents.startswith(b"\xff\xd8\xff")
+    if ext == ".gif":
+        return contents[:6] in (b"GIF87a", b"GIF89a")
+    if ext == ".webp":
+        return contents[:4] == b"RIFF" and contents[8:12] == b"WEBP"
+    return False
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 MAX_PER_TRADE = 2
 
@@ -38,6 +54,8 @@ async def upload_screenshot(trade_id: str, file: UploadFile = File(...)):
     contents = await file.read()
     if len(contents) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File too large. Maximum is 10 MB.")
+    if not _is_image(contents, ext):
+        raise HTTPException(status_code=400, detail=f"This file is not a {ext[1:].upper()} image.")
 
     db = get_db()
     try:
@@ -93,15 +111,16 @@ async def upload_screenshot(trade_id: str, file: UploadFile = File(...)):
 
 @router.get("/screenshots/{filename}")
 async def serve_screenshot(filename: str):
-    """Serve a screenshot file."""
-    file_path = paths.screenshots_dir() / filename
-    if not file_path.exists() or not file_path.is_file():
+    """Serve a screenshot file.
+
+    The name is checked before the disk is touched, and every bad name gets the
+    same 404 as a missing file, so the answer says nothing about other files.
+    """
+    if not STORED_NAME.fullmatch(filename):
         raise HTTPException(status_code=404, detail="Screenshot not found")
-
-    # Security: don't allow path traversal
-    if ".." in filename or "/" in filename or "\\" in filename:
-        raise HTTPException(status_code=400, detail="Invalid filename")
-
+    file_path = paths.screenshots_dir() / filename
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Screenshot not found")
     return FileResponse(file_path)
 
 

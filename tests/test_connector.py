@@ -140,3 +140,99 @@ def test_a_stored_gateio_row_syncs_through_the_gateio_adapter(client, monkeypatc
     status = db.execute("SELECT last_sync_status FROM exchanges").fetchone()[0]
     db.close()
     assert (row["exchange"], row["pair"], status) == ("gateio", "BTC/USDT", "success")
+
+
+class _BinanceKey:
+    """Fake Binance client: `restrictions` is the API answer, or an exception to raise."""
+
+    def __init__(self, restrictions):
+        self.restrictions = restrictions
+
+    def fetch_balance(self):
+        return {}
+
+    def sapiGetAccountApiRestrictions(self):
+        if isinstance(self.restrictions, Exception):
+            raise self.restrictions
+        return self.restrictions
+
+
+_READ_ONLY = {"enableReading": True, "enableWithdrawals": False, "enableInternalTransfer": False}
+
+
+def test_binance_read_only_key_is_accepted():
+    result = connector.ADAPTERS["binance"].check_permissions(_BinanceKey(_READ_ONLY))
+    assert result["error"] is None and result["is_read_only"] is True
+
+
+@pytest.mark.parametrize("flag", ["enableWithdrawals", "enableInternalTransfer"])
+def test_binance_key_that_can_move_money_is_refused(flag):
+    result = connector.ADAPTERS["binance"].check_permissions(_BinanceKey({**_READ_ONLY, flag: True}))
+    assert "Withdrawal or Transfer" in result["error"]
+
+
+@pytest.mark.parametrize("answer", [ccxt.NetworkError("timeout"), ccxt.ExchangeError("-1002"), {}, None])
+def test_binance_key_is_refused_when_its_permissions_cannot_be_read(answer):
+    result = connector.ADAPTERS["binance"].check_permissions(_BinanceKey(answer))
+    assert result["error"] and "not saved" in result["error"]
+
+
+@pytest.mark.parametrize("exchange, name", [("gateio", "Gate.io"), ("kraken", "Kraken")])
+def test_gateio_and_kraken_say_withdrawal_cannot_be_checked(exchange, name):
+    class Key:
+        def fetch_balance(self):
+            return {}
+
+    result = connector.ADAPTERS[exchange].check_permissions(Key())
+    assert result["error"] is None
+    assert any("cannot block a key that can withdraw" in w and name in w for w in result["warnings"])
+
+
+def test_adding_a_gateio_key_returns_the_cannot_check_warning(client, monkeypatch):
+    from app.api import routes_exchanges
+
+    class Key:
+        def fetch_balance(self):
+            return {}
+
+    monkeypatch.setattr(routes_exchanges, "create_client", lambda **kw: Key())
+    resp = _add_gateio(client)
+    assert resp.status_code == 201, resp.text
+    assert any("Gate.io" in w and "read-only" in w for w in resp.json()["warnings"])
+
+
+def test_the_same_key_cannot_be_connected_twice(client, monkeypatch):
+    monkeypatch.setattr(connector.ADAPTERS["gateio"], "check_permissions", lambda c: _OK)
+    assert _add_gateio(client).status_code == 201
+    second = _add_gateio(client)
+    assert second.status_code == 409
+    other = client.post("/api/exchanges", json={"exchange": "gateio", "api_key": "k2", "api_secret": "s"})
+    assert other.status_code == 201
+
+
+def test_adding_a_removed_key_again_reconnects_the_old_connection(client, monkeypatch):
+    from app.database import get_db
+
+    monkeypatch.setattr(connector.ADAPTERS["gateio"], "check_permissions", lambda c: _OK)
+    first = _add_gateio(client).json()["exchange_id"]
+    assert client.delete(f"/api/exchanges/{first}", params={"confirm": True}).status_code == 200
+    again = _add_gateio(client)
+    assert again.status_code == 201
+    assert (again.json()["status"], again.json()["exchange_id"]) == ("reconnected", first)
+    db = get_db()
+    assert db.execute("SELECT COUNT(*) FROM exchanges WHERE exchange = 'gateio'").fetchone()[0] == 1
+    db.close()
+
+
+def test_re_adding_after_an_old_removal_warns_about_duplicates(client, monkeypatch):
+    from app.database import get_db
+
+    monkeypatch.setattr(connector.ADAPTERS["gateio"], "check_permissions", lambda c: _OK)
+    db = get_db()  # removed before fingerprints existed: keys wiped, no fingerprint
+    db.execute("""INSERT INTO exchanges (id, exchange, label, api_key_enc, api_secret_enc, removed_at)
+                  VALUES ('old', 'gateio', 'Gate main', '', '', '2026-01-01T00:00:00.000Z')""")
+    db.commit()
+    db.close()
+    resp = _add_gateio(client)
+    assert resp.status_code == 201
+    assert any("Gate main" in w and "twice" in w for w in resp.json()["warnings"])

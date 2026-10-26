@@ -11,6 +11,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 from app import paths
 from app.database import get_db
+from app.services.pnl_engine import currency_unit
 from app.services.pnl_engine import TradeFilter
 
 router = APIRouter()
@@ -25,13 +26,26 @@ EXPORT_COLUMNS = [
     ("quantity", "Quantity"),
     ("price", "Avg Price"),
     ("total", "Total"),
+    ("quote_currency", "Quote Currency"),
     ("fee", "Fee"),
     ("fee_currency", "Fee Currency"),
     ("fill_count", "Fills"),
     ("order_id", "Order ID"),
     ("strategy", "Strategy"),
+    ("emotion_tag", "Emotion"),
+    ("trade_rating", "Rating"),
     ("notes", "Notes"),
 ]
+
+NUMBER_COLUMNS = {"quantity", "price", "total", "fee", "fill_count", "trade_rating"}
+# A text cell starting with one of these is run as a formula by Excel,
+# LibreOffice and Sheets (e.g. a note "=HYPERLINK(...)").
+FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _decimals(currency: str) -> int:
+    """Dollar amounts to the cent; coin amounts (0.00004 BTC) keep 8 decimals."""
+    return 2 if currency_unit(currency or "") == "USD" else 8
 
 
 def _query_grouped_trades(
@@ -66,17 +80,32 @@ def _query_grouped_trades(
                      ELSE 0 END      as price,
                 SUM(total)           as total,
                 SUM(fee)             as fee,
+                quote_currency,
                 MIN(fee_currency)    as fee_currency,
+                COUNT(DISTINCT fee_currency) as fee_currency_count,
+                GROUP_CONCAT(id)     as fill_ids,
                 COUNT(*)             as fill_count,
                 order_id,
                 MIN(strategy)        as strategy,
+                MIN(emotion_tag)     as emotion_tag,
+                MIN(trade_rating)    as trade_rating,
                 MIN(notes)           as notes
             FROM trades {where}
             GROUP BY {group_key}, exchange_id, pair, side
             ORDER BY {order_by} {order_dir}
         """
-        rows = db.execute(query, params).fetchall()
-        return [dict(r) for r in rows]
+        rows = [dict(r) for r in db.execute(query, params).fetchall()]
+        for row in rows:
+            if row.pop("fee_currency_count") > 1:
+                # Fills paid fees in different coins (e.g. USDT and BNB): never add them up.
+                ids = row["fill_ids"].split(",")
+                parts = db.execute(
+                    f"""SELECT fee_currency, SUM(fee) FROM trades WHERE id IN ({",".join("?" * len(ids))})
+                        GROUP BY fee_currency ORDER BY fee_currency""", ids).fetchall()
+                row["fee"] = "; ".join(f"{amount:g} {currency or '?'}" for currency, amount in parts)
+                row["fee_currency"] = "mixed"
+            row.pop("fill_ids")
+        return rows
     finally:
         db.close()
 
@@ -190,16 +219,36 @@ def _generate_csv_bytes(rows: list[dict]) -> str:
     writer = csv.writer(output)
     writer.writerow([col[1] for col in EXPORT_COLUMNS])
     for row in rows:
-        writer.writerow([
-            _format_value(row.get(col[0], ""), col[0])
-            for col in EXPORT_COLUMNS
-        ])
+        writer.writerow([_csv_cell(row.get(key, ""), key) for key, _ in EXPORT_COLUMNS])
     return output.getvalue()
+
+
+def _number(value, key: str):
+    """The cell's number, or None to write the value as text (a broken row still exports)."""
+    if value in (None, ""):
+        return None
+    try:
+        return int(value) if key in ("fill_count", "trade_rating") else float(value)
+    except (TypeError, ValueError):
+        if not (key == "fee" and isinstance(value, str) and ";" in value):  # mixed-coin fees are text on purpose
+            print(f"[export] {key} {value!r} is not a number; written as text")
+        return None
+
+
+def _csv_cell(value, key: str):
+    if key in NUMBER_COLUMNS and (value is None or isinstance(value, (int, float))):
+        return "" if value is None else value
+    text = _format_value(value, key)
+    # Spreadsheet apps may trim spaces first, so look past them.
+    if isinstance(text, str) and text.lstrip(" \n").startswith(FORMULA_START):
+        return "'" + text  # shown as text, not run
+    return text
 
 
 def _generate_xlsx_bytes(rows: list[dict]) -> bytes:
     """Generate XLSX content as bytes."""
     from openpyxl import Workbook
+    from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
     from openpyxl.styles import Font, Alignment, PatternFill
     from openpyxl.utils import get_column_letter
 
@@ -222,26 +271,23 @@ def _generate_xlsx_bytes(rows: list[dict]) -> bytes:
     for row_idx, row in enumerate(rows, 2):
         for col_idx, (key, _) in enumerate(EXPORT_COLUMNS, 1):
             value = row.get(key, "")
-            cell = ws.cell(row=row_idx, column=col_idx, value=_format_value(value, key))
-
-            if key in ("total", "fee"):
-                try:
-                    cell.value = round(float(value), 2)
-                    cell.number_format = number_fmt_2
-                except (ValueError, TypeError):
-                    pass
-            elif key == "quantity":
-                try:
-                    cell.value = float(value)
+            cell = ws.cell(row=row_idx, column=col_idx)
+            number = _number(value, key) if key in NUMBER_COLUMNS else None
+            if number is not None:
+                cell.value = number
+                if key == "total":
+                    cell.number_format = number_fmt_2 if _decimals(row.get("quote_currency")) == 2 else number_fmt_8
+                elif key == "fee":
+                    cell.number_format = number_fmt_2 if _decimals(row.get("fee_currency")) == 2 else number_fmt_8
+                elif key in ("quantity", "price"):
                     cell.number_format = number_fmt_8
-                except (ValueError, TypeError):
-                    pass
-            elif key == "price":
-                try:
-                    cell.value = round(float(value), 8)
-                    cell.number_format = number_fmt_8
-                except (ValueError, TypeError):
-                    pass
+            else:
+                text = _format_value(value, key)
+                if isinstance(text, str):
+                    text = ILLEGAL_CHARACTERS_RE.sub("", text)  # control characters break the file
+                cell.value = text
+                if isinstance(text, str) and text:
+                    cell.data_type = "s"  # always text, never a formula
 
             if key == "side" and value:
                 if value.lower() == "buy":
@@ -285,7 +331,11 @@ def _format_value(value, key: str):
     if value is None:
         return ""
     if key == "timestamp" and value:
-        return str(value).replace("T", " ").replace("+00:00", " UTC")
+        try:  # one format for synced and manual trades
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        except ValueError:
+            print(f"[export] time {value!r} could not be read; written as stored")
+            return str(value)
     if key == "side" and value:
         return value.upper()
     if key == "exchange" and value:

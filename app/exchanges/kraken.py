@@ -5,7 +5,11 @@ from typing import Optional
 
 import ccxt
 
-from app.exchanges.base import ExchangeAdapter
+from app.exchanges.base import CANNOT_CHECK, ExchangeAdapter, SyncCursor
+
+
+PAGE_SIZE = 50  # trades per TradesHistory answer
+MAX_PAGES = 400
 
 
 class KrakenAdapter(ExchangeAdapter):
@@ -15,34 +19,35 @@ class KrakenAdapter(ExchangeAdapter):
         print("[sync] Kraken: fetching all trades via bulk fetch")
         client.load_markets()
 
-        all_trades = []
-        limit = 100
-        max_pages = 200
-        current_since = since
-        page = 0
+        # One fetch returns every pair, so one start time. An extra pair Kraken
+        # lists but never checked yet starts from the start date.
+        listed_extra = {p for p in extra_pairs if p in client.markets}
+        start = since.bulk_since(False, listed_extra) if isinstance(since, SyncCursor) else since
 
-        while page < max_pages:
-            page += 1
+        # Kraken answers newest first, PAGE_SIZE trades at a time, after `start`;
+        # `ofs` walks back through the rest.
+        all_trades = []
+        offset = 0
+        for _ in range(MAX_PAGES):
             try:
-                trades = client.fetch_my_trades(
-                    symbol=None, since=current_since, limit=limit
-                )
-            except (ccxt.BadRequest, ccxt.ArgumentsRequired, TypeError):
+                trades = client.fetch_my_trades(symbol=None, since=start, params={"ofs": offset})
+            except (ccxt.BadRequest, ccxt.ArgumentsRequired):
                 print("[sync] Kraken bulk fetch not supported, falling back to per-symbol")
                 candidates = self.discover_spot_pairs(client, tracked_pairs, extra_pairs)
                 return self.paginate_per_symbol(client, candidates, since)
-
-            if not trades:
-                break
             all_trades.extend(trades)
-            last_ts = trades[-1].get("timestamp")
-            if not last_ts or last_ts == current_since:
-                break
-            current_since = last_ts + 1
-            if len(trades) < limit:
+            offset += len(trades)
+            if len(trades) < PAGE_SIZE:
                 break
             time.sleep(0.1)
+        else:
+            raise RuntimeError(
+                f"Kraken has more than {MAX_PAGES * PAGE_SIZE} trades since the start date; "
+                "stopped so nothing is half-synced. Set a later sync start date."
+            )
 
+        if isinstance(since, SyncCursor):
+            since.checked |= {t["symbol"] for t in all_trades if t.get("symbol")} | listed_extra
         print(f"[sync] Kraken: fetched {len(all_trades)} trades")
         return all_trades
 
@@ -51,11 +56,9 @@ class KrakenAdapter(ExchangeAdapter):
             client.fetch_balance()
             return {
                 "is_read_only": True,
-                "permissions": [
-                    "read (verified)",
-                    "write status (unable to verify — ensure your key is read-only)",
-                ],
-                "warnings": [],
+                "permissions": ["read (verified)", "withdrawal: not checked"],
+                # Kraken has no API that reports a key's permissions.
+                "warnings": [CANNOT_CHECK.format(name="Kraken")],
                 "error": None,
             }
         except ccxt.AuthenticationError as e:

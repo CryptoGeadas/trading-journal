@@ -6,10 +6,12 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - journal-data:/data
+    # Settings from .env (if there is one); the lines below win over it.
+    env_file:
+      - path: .env
+        required: false
     environment:
       - SYNC_INTERVAL_HOURS=6
-      - DEFAULT_QUOTE_CURRENCY=USDT
-      - DEFAULT_PNL_METHOD=fifo
     restart: unless-stopped
 
 volumes:

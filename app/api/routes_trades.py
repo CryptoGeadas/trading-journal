@@ -1,11 +1,13 @@
 """Trades endpoints — grouped orders with fill expansion + manual entry."""
 
+import math
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
-from app import timeutil
+from app import paths, timeutil
 from app.database import get_db
 from app.services.pnl_engine import TradeFilter
 from app.models import TradeOut, TradeUpdate, TradesPage, OrderOut, OrdersPage
@@ -232,16 +234,26 @@ async def create_manual_trade(body: ManualTradeCreate):
     """Manually add a trade (for OTC, unlisted exchanges, or corrections)."""
     if body.side not in ("buy", "sell"):
         raise HTTPException(status_code=400, detail="Side must be 'buy' or 'sell'.")
+    if body.trade_type not in ("spot", "futures"):
+        raise HTTPException(status_code=400, detail="Type must be 'spot' or 'futures'.")
+    if not all(math.isfinite(v) for v in (body.quantity, body.price, body.fee)):
+        raise HTTPException(status_code=400, detail="Quantity, price and fee must be normal numbers.")
+    # A negative fee would count as profit. Maker rebates can go in the notes.
+    if body.fee < 0:
+        raise HTTPException(status_code=400, detail="Fee cannot be negative (write a rebate in the notes).")
     if body.quantity <= 0:
         raise HTTPException(status_code=400, detail="Quantity must be positive.")
     if body.price <= 0:
         raise HTTPException(status_code=400, detail="Price must be positive.")
-    if "/" not in body.pair:
+    pair = body.pair.upper().strip()
+    if not re.fullmatch(r"[A-Z0-9]+/[A-Z0-9]+(:[A-Z0-9]+)?", pair):
         raise HTTPException(status_code=400, detail="Pair must be in BASE/QUOTE format (e.g. BTC/USDT).")
-
-    parts = body.pair.upper().split("/")
-    base = parts[0]
-    quote = parts[1] if len(parts) > 1 else ""
+    if ":" in pair and body.trade_type != "futures":
+        raise HTTPException(status_code=400, detail="A pair with ':' (e.g. BTC/USDT:USDT) is a futures pair; set the type to futures.")
+    base, _, rest = pair.partition("/")
+    quote = rest.split(":")[0]
+    if body.trade_type == "futures" and ":" not in pair:
+        pair = f"{pair}:{quote}"  # futures never share a pair name with spot
 
     trade_id = str(uuid.uuid4())
     external_id = f"manual_{trade_id[:8]}"
@@ -260,8 +272,8 @@ async def create_manual_trade(body: ManualTradeCreate):
         ).fetchone()
         if not existing_ex:
             db.execute(
-                """INSERT INTO exchanges (id, exchange, label, api_key_enc, api_secret_enc, is_read_only)
-                   VALUES (?, ?, ?, '', '', 1)""",
+                """INSERT INTO exchanges (id, exchange, label, api_key_enc, api_secret_enc, is_read_only, is_manual)
+                   VALUES (?, ?, ?, '', '', 1, 1)""",
                 [exchange_id, body.exchange.lower(), f"{body.exchange} (Manual)"],
             )
 
@@ -275,7 +287,7 @@ async def create_manual_trade(body: ManualTradeCreate):
             [
                 trade_id, exchange_id, body.exchange.lower(), external_id,
                 body.order_id or None, ts,
-                body.pair.upper(), base, quote, body.side,
+                pair, base, quote, body.side,
                 body.quantity, body.price, total,
                 body.fee, body.fee_currency,
                 body.trade_type, body.strategy or None, body.notes or None,
@@ -286,10 +298,58 @@ async def create_manual_trade(body: ManualTradeCreate):
         return {
             "status": "created",
             "id": trade_id,
-            "pair": body.pair.upper(),
+            "pair": pair,
             "side": body.side,
             "total": round(total, 2),
         }
+    finally:
+        db.close()
+
+
+@router.delete("/trades/{trade_id}")
+async def delete_manual_trade(trade_id: str, confirm: bool = False):
+    """Delete a manual trade (all its fills when it has an order ID). Synced trades can't be deleted:
+    the next sync would bring them back."""
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Pass ?confirm=true to delete the trade.")
+    db = get_db()
+    try:
+        row = db.execute(
+            """SELECT t.id, t.order_id, t.exchange_id, e.is_manual FROM trades t
+               JOIN exchanges e ON e.id = t.exchange_id WHERE t.id = ?""",
+            [trade_id],
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Trade not found")
+        if not row["is_manual"]:
+            raise HTTPException(status_code=403, detail="Only manual trades can be deleted. Synced trades come back on the next sync.")
+
+        if row["order_id"]:
+            ids = [r["id"] for r in db.execute(
+                "SELECT id FROM trades WHERE order_id = ? AND exchange_id = ?", [row["order_id"], row["exchange_id"]]
+            ).fetchall()]
+        else:
+            ids = [trade_id]
+        marks = ",".join("?" * len(ids))
+        shots = db.execute(
+            f"SELECT filename FROM trade_screenshots WHERE trade_id IN ({marks})", ids
+        ).fetchall()
+        db.execute(f"DELETE FROM trade_screenshots WHERE trade_id IN ({marks})", ids)
+        db.execute(f"DELETE FROM trades WHERE id IN ({marks})", ids)
+        # A manual source with no trades left goes too (it only exists for its trades).
+        db.execute(
+            "DELETE FROM exchanges WHERE id = ? AND is_manual = 1 AND NOT EXISTS (SELECT 1 FROM trades WHERE exchange_id = ?)",
+            [row["exchange_id"], row["exchange_id"]],
+        )
+        db.commit()
+        files_left = []
+        for s in shots:  # the trade is gone already; a stuck file must not turn that into an error
+            try:
+                (paths.screenshots_dir() / s["filename"]).unlink(missing_ok=True)
+            except OSError as e:
+                print(f"[trades] Could not remove screenshot {s['filename']}: {e}")
+                files_left.append(s["filename"])
+        return {"status": "deleted", "deleted": len(ids), "files_left": files_left}
     finally:
         db.close()
 

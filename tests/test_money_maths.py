@@ -607,3 +607,37 @@ def test_a_bad_trade_time_is_refused(api):
     resp = api.post("/api/trades", json={"pair": "BTC/USDT", "side": "buy", "quantity": 1, "price": 1,
                                          "timestamp": "next tuesday"})
     assert resp.status_code == 400
+
+
+def test_time_of_day_uses_the_browsers_time_zone(api):
+    add(api, "buy", 1, 100, "2026-07-01T00:00:00Z")
+    add(api, "sell", 1, 150, "2026-07-02T13:00:00Z")  # 14:00 in Lisbon (summer time)
+    def tod(**params):
+        resp = api.get("/api/patterns", params=params).json()
+        return next(p["data"] for p in resp["patterns"] if p["type"] == "time_of_day")
+    lisbon = tod(tz="Europe/Lisbon")
+    assert (lisbon["time_zone"], [h["hour"] for h in lisbon["by_hour"]]) == ("Europe/Lisbon", [14])
+    utc = tod()
+    assert (utc["time_zone"], [h["hour"] for h in utc["by_hour"]]) == ("UTC", [13])
+    assert tod(tz="Mars/Olympus")["time_zone"] == "UTC"  # unknown zone: said to be UTC
+
+
+
+def test_time_of_day_follows_summer_and_winter_time(api):
+    add(api, "buy", 1, 100, "2026-01-10T00:00:00Z")
+    add(api, "sell", 1, 150, "2026-01-15T13:00:00Z")  # 13:00 in Lisbon (winter)
+    add(api, "buy", 1, 100, "2026-07-10T00:00:00Z")
+    add(api, "sell", 1, 50, "2026-07-15T13:00:00Z")   # 14:00 in Lisbon (summer)
+    p = next(p for p in api.get("/api/patterns", params={"tz": "Europe/Lisbon"}).json()["patterns"]
+             if p["type"] == "time_of_day")
+    assert {h["hour"]: h["pnl"] for h in p["data"]["by_hour"]} == {13: 50.0, 14: -50.0}
+    assert "Best hour: 13:00 Europe/Lisbon" in p["insight"] and "Worst hour: 14:00 Europe/Lisbon" in p["insight"]
+
+
+def test_a_folder_name_as_time_zone_falls_back_to_utc(api):
+    add(api, "buy", 1, 100, "2026-01-10T00:00:00Z")
+    add(api, "sell", 1, 150, "2026-01-15T13:00:00Z")
+    resp = api.get("/api/patterns", params={"tz": "America"})
+    assert resp.status_code == 200
+    tod = next(p["data"] for p in resp.json()["patterns"] if p["type"] == "time_of_day")
+    assert tod["time_zone"] == "UTC"

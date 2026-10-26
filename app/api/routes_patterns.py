@@ -1,7 +1,8 @@
 """Pattern detection — streaks, time-of-day analysis, avg hold time."""
 
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from typing import Optional
 
@@ -17,14 +18,21 @@ router = APIRouter()
 async def detect_patterns(
     method: Optional[str] = Query(None, pattern=METHOD_PATTERN),
     currency: Optional[str] = None,
+    tz: Optional[str] = Query(None, max_length=64),
 ):
-    """Analyse trading patterns: streaks, time-of-day, hold times."""
+    """Analyse trading patterns: streaks, time-of-day, hold times.
+
+    `tz` is the browser's time zone (e.g. Europe/Lisbon), so hours match the
+    trade times on the page. Without it (or if unknown) hours are UTC.
+    """
     result, _ = match_all(method)
     closed = result.closed
     money_currency = pnl_engine.currency_unit(currency) if currency else main_currency(closed)
+    zone_name, zone = _zone(tz)
 
     patterns = []
-    for data in (_detect_streaks(closed), _time_of_day_analysis(closed, money_currency), _avg_hold_time(closed)):
+    for data in (_detect_streaks(closed), _time_of_day_analysis(closed, money_currency, zone, zone_name),
+                 _avg_hold_time(closed)):
         if data:
             patterns.append(data)
     return {"patterns": patterns}
@@ -93,14 +101,24 @@ def main_currency(closed: list[ClosedTrade]) -> str:
     return sorted(used.items(), key=lambda kv: (-kv[1], kv[0] != "USD", kv[0]))[0][0] if used else "USD"
 
 
-def _time_of_day_analysis(closed: list[ClosedTrade], currency: str) -> dict | None:
-    """Analyse performance by hour of day (hour the trade was closed), in one currency."""
+def _zone(name: Optional[str]):
+    if name:
+        try:
+            return name, ZoneInfo(name)
+        except (ZoneInfoNotFoundError, ValueError, OSError):  # unknown, malformed, or a folder name
+            print(f"[patterns] Unknown time zone {name!r}; hours are shown in UTC")
+    return "UTC", timezone.utc
+
+
+def _time_of_day_analysis(closed: list[ClosedTrade], currency: str, zone=timezone.utc,
+                          zone_name: str = "UTC") -> dict | None:
+    """Analyse performance by hour of day (local hour the trade was closed), in one currency."""
     hourly = defaultdict(lambda: {"count": 0, "pnl": 0.0, "wins": 0})
     for t in closed:
         if t.currency != currency:
             continue
         try:
-            hour = datetime.fromisoformat(t.close_time.replace("Z", "+00:00")).hour
+            hour = datetime.fromisoformat(t.close_time.replace("Z", "+00:00")).astimezone(zone).hour
         except ValueError:
             continue
         hourly[hour]["count"] += 1
@@ -127,11 +145,12 @@ def _time_of_day_analysis(closed: list[ClosedTrade], currency: str) -> dict | No
         "title": "Time of Day Performance",
         "data": {
             "currency": currency,
+            "time_zone": zone_name,
             "by_hour": hours_list,
             "best_hour": best,
             "worst_hour": worst,
         },
-        "insight": _tod_insight(best, worst, hours_list, currency),
+        "insight": _tod_insight(best, worst, hours_list, currency, zone_name),
     }
 
 
@@ -141,15 +160,15 @@ def _money(amount: float, currency: str) -> str:
     return f"{amount:.8f}".rstrip("0").rstrip(".") + f" {currency}"
 
 
-def _tod_insight(best, worst, hours_list, currency):
+def _tod_insight(best, worst, hours_list, currency, zone_name="UTC"):
     if not best or not worst:
         return "Not enough data for time-of-day analysis."
     total = sum(h["count"] for h in hours_list)
     parts = [f"Analysed {total} closed trades across {len(hours_list)} trading hours."]
     if best["pnl"] > 0:
-        parts.append(f"Best hour: {best['hour']:02d}:00 UTC ({best['count']} trades, +{_money(best['pnl'], currency)}).")
+        parts.append(f"Best hour: {best['hour']:02d}:00 {zone_name} ({best['count']} trades, +{_money(best['pnl'], currency)}).")
     if worst["pnl"] < 0:
-        parts.append(f"Worst hour: {worst['hour']:02d}:00 UTC ({worst['count']} trades, -{_money(abs(worst['pnl']), currency)}).")
+        parts.append(f"Worst hour: {worst['hour']:02d}:00 {zone_name} ({worst['count']} trades, -{_money(abs(worst['pnl']), currency)}).")
     return " ".join(parts)
 
 

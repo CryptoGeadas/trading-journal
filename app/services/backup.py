@@ -1,10 +1,33 @@
-"""Shared backup logic — used by both the API route and the auto-backup scheduler."""
+"""Shared backup logic — used by both the API route and the auto-backup scheduler.
+
+A backup holds the database, the encryption key (so stored exchange keys
+still work after a restore), screenshots and extra_pairs.txt. Because it
+holds the key, the backup file is as secret as the API keys themselves.
+"""
 
 import io
+import sqlite3
+import tempfile
 import zipfile
 from datetime import datetime, timezone
+from pathlib import Path
 
 from app import paths
+
+
+def _database_copy(db_path: Path) -> bytes:
+    """A consistent copy through SQLite's backup API: changes still in the
+    WAL file are included, which copying journal.db alone would miss."""
+    with tempfile.TemporaryDirectory() as tmp:
+        copy_path = Path(tmp) / "journal.db"
+        source = sqlite3.connect(str(db_path))
+        target = sqlite3.connect(str(copy_path))
+        try:
+            source.backup(target)
+        finally:
+            target.close()
+            source.close()
+        return copy_path.read_bytes()
 
 
 def create_backup_zip() -> tuple[bytes, str]:
@@ -16,7 +39,10 @@ def create_backup_zip() -> tuple[bytes, str]:
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         db_path = paths.db_path()
         if db_path.exists():
-            zf.write(str(db_path), "journal.db")
+            zf.writestr("journal.db", _database_copy(db_path))
+        key_path = paths.encryption_key_path()
+        if key_path.exists():
+            zf.write(str(key_path), ".encryption_key")
         screenshots_dir = paths.screenshots_dir()
         if screenshots_dir.exists():
             for img in screenshots_dir.iterdir():

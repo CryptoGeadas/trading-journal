@@ -1,6 +1,8 @@
 """Trading Journal — FastAPI Application."""
 
 import base64
+import binascii
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -11,6 +13,7 @@ from fastapi.responses import FileResponse
 
 from app import paths
 from app.database import init_db
+from app.encryption import KeyFileMissing
 from app.services.pnl_engine import BadFilter
 from app.scheduler import start_scheduler, stop_scheduler
 from app.api.routes_overview import router as overview_router
@@ -25,6 +28,7 @@ from app.api.routes_funding import router as funding_router
 from app.api.routes_patterns import router as patterns_router
 from app.api.routes_notes import router as notes_router
 from app.api.routes_emotion_tags import router as emotion_tags_router
+from app.api.routes_demo import router as demo_router
 
 
 @asynccontextmanager
@@ -58,12 +62,14 @@ if AUTH_USER and AUTH_PASS:
             auth = request.headers.get("Authorization", "")
             if auth.startswith("Basic "):
                 try:
-                    decoded = base64.b64decode(auth[6:]).decode("utf-8")
-                    user, password = decoded.split(":", 1)
-                    if user == AUTH_USER and password == AUTH_PASS:
-                        return await call_next(request)
-                except Exception:
-                    pass
+                    user, password = base64.b64decode(auth[6:], validate=True).decode("utf-8").split(":", 1)
+                except (binascii.Error, UnicodeDecodeError, ValueError):
+                    user, password = "", ""  # a broken header is just a wrong login
+                # Constant-time compare: the time taken says nothing about the right values.
+                user_ok = secrets.compare_digest(user.encode("utf-8"), AUTH_USER.encode("utf-8"))
+                pass_ok = secrets.compare_digest(password.encode("utf-8"), AUTH_PASS.encode("utf-8"))
+                if user_ok and pass_ok:
+                    return await call_next(request)
 
             return Response(
                 status_code=401,
@@ -103,6 +109,11 @@ async def security_headers(request, call_next):
 
 
 # --- API routes ---
+@app.exception_handler(KeyFileMissing)
+async def key_file_missing(request: Request, exc: KeyFileMissing):
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+
 @app.exception_handler(BadFilter)
 async def bad_filter(request: Request, exc: BadFilter):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
@@ -120,6 +131,7 @@ app.include_router(funding_router, prefix="/api")
 app.include_router(patterns_router, prefix="/api")
 app.include_router(notes_router, prefix="/api")
 app.include_router(emotion_tags_router, prefix="/api")
+app.include_router(demo_router, prefix="/api")
 
 # --- Static frontend ---
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"

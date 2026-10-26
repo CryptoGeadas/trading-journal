@@ -470,7 +470,10 @@
                                 <input type="date" class="filter-input" id="new-exchange-start-date">
                             </div>
                             <div class="notice warning">
-                                <strong>Important:</strong> Create API keys with <strong>read-only</strong> permissions. Withdrawal and transfer permissions must be disabled — the app will reject keys that have them. For Binance futures, "Enable Futures" is required for reading trade history (the app never places orders).
+                                <strong>Important:</strong> Create API keys with <strong>read-only</strong> permissions. Withdrawal and transfer permissions must be disabled. On Binance the app checks this and refuses keys that can withdraw or transfer. For Binance futures, "Enable Futures" is required for reading trade history (the app never places orders).
+                            </div>
+                            <div class="notice warning" id="exchange-unchecked" style="display: none">
+                                <strong><span id="exchange-unchecked-name"></span> cannot be checked.</strong> This exchange does not let apps read a key's permissions, so the app cannot block a key that can withdraw. Create a read-only key and check it on the exchange yourself.
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -539,7 +542,8 @@
                 <div class="card" style="margin-top: 1.5rem">
                     <h3 class="card-title">Data Management</h3>
                     <p class="form-note" style="margin-top: 0; margin-bottom: 0.75rem">
-                        Backup includes your database, screenshots, and extra_pairs.txt — everything needed to restore your journal.
+                        Backup includes your database, encryption key, screenshots, and extra_pairs.txt — everything needed to restore your journal.
+                        <strong>Keep backup files private:</strong> with the key inside, they can unlock your saved exchange API keys.
                     </p>
                     <div class="form-row">
                         <button class="btn btn-secondary" data-action="download-backup">Download Backup</button>

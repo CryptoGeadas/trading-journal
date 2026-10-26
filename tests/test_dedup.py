@@ -89,7 +89,7 @@ class TestInsertTrades:
 
         row = test_db.execute("SELECT trade_type, pair FROM trades").fetchone()
         assert row["trade_type"] == "futures"
-        assert row["pair"] == "BTC/USDT"  # colon portion stripped
+        assert row["pair"] == "BTC/USDT:USDT"  # futures keep their name, never the spot pair
 
     def test_empty_trades_list(self, test_db):
         ex_id = _setup_exchange(test_db)

@@ -2,7 +2,7 @@
 
 import ccxt
 
-from app.exchanges.base import ExchangeAdapter
+from app.exchanges.base import CANNOT_CHECK, DAY_MS, ExchangeAdapter
 
 
 class GateioAdapter(ExchangeAdapter):
@@ -11,25 +11,18 @@ class GateioAdapter(ExchangeAdapter):
     def sync_spot(self, client, since, tracked_pairs, extra_pairs):
         client.load_markets()
         candidates = self.discover_spot_pairs(client, tracked_pairs, extra_pairs)
-        all_trades = self.paginate_per_symbol(client, candidates, since=None)
-
-        if since:
-            filtered = [t for t in all_trades if (t.get("timestamp") or 0) >= since]
-            if len(filtered) < len(all_trades):
-                print(f"[sync] Filtered to {len(filtered)} trades after start date (from {len(all_trades)} total)")
-            return filtered
-        return all_trades
+        # Gate.io pages forward from `from`; walk in 7-day windows so the
+        # range of each request stays small.
+        return self.paginate_per_symbol(client, candidates, since, window_ms=7 * DAY_MS)
 
     def check_permissions(self, client):
         try:
             client.fetch_balance()
             return {
                 "is_read_only": True,
-                "permissions": [
-                    "read (verified)",
-                    "write status (unable to verify — ensure your key is read-only)",
-                ],
-                "warnings": [],
+                "permissions": ["read (verified)", "withdrawal: not checked"],
+                # Gate.io has no API that reports a key's permissions.
+                "warnings": [CANNOT_CHECK.format(name="Gate.io")],
                 "error": None,
             }
         except ccxt.AuthenticationError as e:

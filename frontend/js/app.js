@@ -323,7 +323,7 @@ async function loadFilterOptions() {
         }
 
         // Load exchanges for dropdown
-        const exchanges = await API.exchanges();
+        const exchanges = await API.exchanges({ include_manual: true });  // manual trades are filterable too
         const exSelect = document.getElementById('filter-exchange');
         if (exSelect && exSelect.options.length <= 1) {
             exchanges.forEach(e => {
@@ -483,7 +483,8 @@ async function loadExchanges() {
             }
 
             const statusColour = e.last_sync_status === 'success' ? 'var(--green)'
-                : e.last_sync_status === 'error' ? 'var(--red)' : 'var(--text-muted)';
+                : e.last_sync_status === 'error' ? 'var(--red)'
+                : e.last_sync_status === 'partial' ? 'var(--yellow)' : 'var(--text-muted)';
 
             return `
             <div class="exchange-card${staleClass}">
@@ -540,10 +541,15 @@ async function syncExchange(id) {
     try {
         showToast('Syncing trades...', 'info', 2000);
         const result = await API.syncExchange(id);
-        showToast(`Sync complete — ${result.trades_fetched} new trades`, 'success');
+        if (result.status === 'partial') {
+            showToast(`Synced ${result.trades_fetched} new trades, but not everything: ${result.error}`, 'error', 8000);
+        } else {
+            showToast(`Sync complete — ${result.trades_fetched} new trades` + (result.error ? `. ${result.error}` : ''), 'success',
+                      result.error ? 8000 : 4000);
+        }
         loadExchanges();
     } catch (err) {
-        showToast('Sync failed: ' + err.message, 'error');
+        showToast(err.message, 'error', 8000);  // the API message starts with "Sync failed:"
     }
 }
 
@@ -651,7 +657,7 @@ function sideClass(side) {
 }
 
 function statusBadge(status) {
-    const colours = { success: 'var(--green)', error: 'var(--red)', running: 'var(--yellow)' };
+    const colours = { success: 'var(--green)', error: 'var(--red)', running: 'var(--yellow)', partial: 'var(--yellow)' };
     const colour = colours[status] || 'var(--text-muted)';
     return `<span style="color:${colour}; font-weight:600">${esc(status)}</span>`;
 }
@@ -924,6 +930,7 @@ const CLICK_ACTIONS = {
     'sync-exchange':     (el) => syncExchange(el.dataset.id),
     'remove-exchange':   (el) => removeExchange(el.dataset.id, el.dataset.name),
     'delete-note':       (el) => deleteNote(el.dataset.id),
+    'delete-trade':      (el) => deleteTrade(el.dataset.id),
     'close-toast':       (el) => el.closest('.toast')?.remove(),
 };
 
@@ -1013,9 +1020,19 @@ function closeLightbox() {
 }
 
 // ---- Patterns ----
+// The browser's time zone, so pattern hours match the times in the trade table.
+function browserTimeZone() {
+    try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    } catch (err) {
+        return 'UTC';
+    }
+}
+
 async function loadPatterns() {
     try {
-        const data = await API.patterns(pnlSettings());
+        const zone = browserTimeZone();
+        const data = await API.patterns({ ...pnlSettings(), tz: zone });
         const section = document.getElementById('patterns-section');
         const container = document.getElementById('patterns-container');
         if (!section || !container) return;
@@ -1042,9 +1059,10 @@ async function loadPatterns() {
                 const worst = p.data.worst_hour;
                 detailHtml = `
                     <div class="pattern-stats">
-                        ${best ? `<span>Best hour: <strong>${esc(best.hour)}:00 UTC</strong> (${esc(formatCurrency(best.pnl, p.data.currency))})</span>` : ''}
-                        ${worst ? `<span>Worst hour: <strong>${esc(worst.hour)}:00 UTC</strong> (${esc(formatCurrency(worst.pnl, p.data.currency))})</span>` : ''}
-                    </div>`;
+                        ${best ? `<span>Best hour: <strong>${esc(String(best.hour).padStart(2, '0'))}:00</strong> ${esc(p.data.time_zone)} (${esc(formatCurrency(best.pnl, p.data.currency))})</span>` : ''}
+                        ${worst ? `<span>Worst hour: <strong>${esc(String(worst.hour).padStart(2, '0'))}:00</strong> ${esc(p.data.time_zone)} (${esc(formatCurrency(worst.pnl, p.data.currency))})</span>` : ''}
+                    </div>
+                    ${p.data.time_zone !== zone ? `<p class="form-note">Your time zone (${esc(zone)}) is not known to the server, so these hours are ${esc(p.data.time_zone)}, not the times in the trade table.</p>` : ''}`;
             } else if (p.type === 'hold_time' && p.data) {
                 detailHtml = `
                     <div class="pattern-stats">
@@ -1217,6 +1235,25 @@ function setRatingStars(value) {
     });
 }
 
+// Manual trades are kept under a "manual_..." source; only those can be deleted.
+function isManualTrade(t) {
+    return typeof t.exchange_id === 'string' && t.exchange_id.startsWith('manual_');
+}
+
+async function deleteTrade(id) {
+    if (!confirm('Delete this manual trade? This cannot be undone.')) return;
+    try {
+        await API.deleteTrade(id);
+        showToast('Trade deleted', 'success');
+        closeModal('modal-trade-detail');
+        const exSelect = document.getElementById('filter-exchange');
+        if (exSelect) exSelect.length = 1;  // a removed manual source must leave the filter too
+        loadTrades();
+    } catch (err) {
+        showToast('Could not delete: ' + err.message, 'error');
+    }
+}
+
 function openTradeDetail(tradeId, tradeData) {
     _currentDetailTradeId = tradeId;
 
@@ -1238,7 +1275,11 @@ function openTradeDetail(tradeId, tradeData) {
                 <div class="detail-item"><span class="detail-label">Price</span><span class="detail-value mono">${esc(formatPrice(tradeData.price))}</span></div>
                 <div class="detail-item"><span class="detail-label">Total</span><span class="detail-value mono">${esc(formatCurrency(tradeData.total, tradeData.quote_currency))}</span></div>
                 <div class="detail-item"><span class="detail-label">Fee</span><span class="detail-value mono">${esc(formatFee(tradeData.fee, tradeData.fee_currency))}</span></div>
-            </div>`;
+            </div>
+            ${isManualTrade(tradeData) ? `<div class="form-row" style="margin-top: 0.75rem">
+                <button class="btn btn-ghost btn-sm" data-action="delete-trade" data-id="${esc(tradeId)}">Delete manual trade</button>
+                <span class="form-note">To fix a typo, delete it and add it again.</span>
+            </div>` : ''}`;
     }
 
     if (notes) notes.value = tradeData.notes || '';
@@ -1343,6 +1384,12 @@ async function restoreBackup(file) {
             return;
         }
 
+        if (data.keys_readable === false) {
+            // Keep the message up: the user has to act on it.
+            showToast(data.message, 'warning', 15000);
+            setTimeout(() => window.location.reload(), 15000);
+            return;
+        }
         showToast(`Backup restored! ${data.screenshots_restored} screenshots recovered. Reloading...`, 'success', 3000);
         setTimeout(() => window.location.reload(), 3000);
     } catch (err) {
@@ -1362,7 +1409,7 @@ async function updateGlobalSyncStatus() {
             dot.className = 'sync-dot';
             text.textContent = 'No exchanges';
         } else {
-            const hasError = exchanges.some(e => e.last_sync_status === 'error');
+            const hasError = exchanges.some(e => e.last_sync_status === 'error' || e.last_sync_status === 'partial');
             dot.className = 'sync-dot ' + (hasError ? 'error' : 'connected');
             text.textContent = `${exchanges.length} exchange${exchanges.length > 1 ? 's' : ''}`;
         }
@@ -1452,6 +1499,13 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('new-exchange-type')?.addEventListener('change', (e) => {
         const needs = ['gateio', 'kraken'].includes(e.target.value);
         document.getElementById('passphrase-group').style.display = needs ? 'block' : 'none';
+        // Only Binance reports a key's permissions; say so before the key is pasted.
+        const names = { gateio: 'Gate.io', kraken: 'Kraken' };
+        const unchecked = document.getElementById('exchange-unchecked');
+        if (unchecked) {
+            unchecked.style.display = names[e.target.value] ? 'block' : 'none';
+            setText('exchange-unchecked-name', names[e.target.value] || '');
+        }
     });
 
     // Submit exchange
@@ -1469,8 +1523,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         try {
-            await API.addExchange(body);
+            const result = await API.addExchange(body);
             closeModal('modal-add-exchange');
+            (result.warnings || []).forEach(w => showToast(w, 'warning', 10000));
             loadExchanges();
         } catch (err) {
             showToast('Failed to add exchange: ' + err.message, 'error');
