@@ -97,3 +97,11 @@ def test_remove_deletes_all_demo_rows_and_no_real_rows(api):
     assert db.execute("SELECT COUNT(*) FROM exchanges WHERE is_demo = 1").fetchone()[0] == 0
     db.close()
     assert api.get("/api/demo").json() == {"loaded": False}
+
+
+def test_a_demo_strategy_used_on_a_real_trade_is_kept(api):
+    api.post("/api/demo")
+    api.post("/api/trades", json={"pair": "BTC/USDT", "side": "buy", "quantity": 1, "price": 100,
+                                  "strategy": "Mean Reversion"})
+    api.delete("/api/demo", params={"confirm": True})
+    assert [s["name"] for s in api.get("/api/strategies").json()] == ["Mean Reversion"]

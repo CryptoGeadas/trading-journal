@@ -107,4 +107,7 @@ const API = {
     deleteEmotionTag:   (id)        => API.delete(`/emotion-tags/${id}`, { confirm: true }),
     equityCurve:        (params = {}) => API.get('/equity-curve', params),
     health:           ()          => fetch('/health').then(r => r.json()),
+    demoStatus:       ()          => API.get('/demo'),
+    loadDemo:         ()          => API.post('/demo'),
+    removeDemo:       ()          => API.delete('/demo', { confirm: true }),
 };

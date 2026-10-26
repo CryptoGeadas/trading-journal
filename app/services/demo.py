@@ -212,6 +212,9 @@ def remove(db) -> dict:
     db.execute(f"DELETE FROM tracked_pairs WHERE exchange_id IN ({marks})", accounts)
     db.execute(f"DELETE FROM sync_log WHERE exchange_id IN ({marks})", accounts)
     db.execute(f"DELETE FROM exchanges WHERE id IN ({marks})", accounts)
+    # A demo strategy the user put on their own trades is theirs now: keep it.
+    db.execute("""UPDATE strategies SET is_demo = 0 WHERE is_demo = 1
+                  AND name IN (SELECT strategy FROM trades WHERE strategy IS NOT NULL)""")
     counts["strategies"] = db.execute("DELETE FROM strategies WHERE is_demo = 1").rowcount
     counts["notes"] = db.execute("DELETE FROM notes WHERE is_demo = 1").rowcount
     db.commit()

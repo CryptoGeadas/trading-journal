@@ -36,6 +36,42 @@ function loadPageData(page) {
     }
 }
 
+// ---- Demo data ----
+async function refreshDemoBanner() {
+    try {
+        const { loaded } = await API.demoStatus();
+        const banner = document.getElementById('demo-banner');
+        if (banner) banner.style.display = loaded ? 'flex' : 'none';
+        const load = document.getElementById('btn-load-demo');
+        const remove = document.getElementById('btn-remove-demo');
+        if (load) load.style.display = loaded ? 'none' : '';
+        if (remove) remove.style.display = loaded ? '' : 'none';
+    } catch (err) {
+        console.error('Could not check for demo data:', err);
+    }
+}
+
+async function loadDemo() {
+    try {
+        const result = await API.loadDemo();
+        showToast(`Demo data loaded: ${result.trades} fills, ${result.funding} funding payments.`, 'success');
+        window.location.reload();
+    } catch (err) {
+        showToast('Could not load demo data: ' + err.message, 'error');
+    }
+}
+
+async function removeDemo() {
+    if (!confirm('Remove all demo data? Your own trades, strategies and notes stay.')) return;
+    try {
+        await API.removeDemo();
+        showToast('Demo data removed.', 'success');
+        window.location.reload();
+    } catch (err) {
+        showToast('Could not remove demo data: ' + err.message, 'error');
+    }
+}
+
 // ---- Overview ----
 async function loadOverview() {
     try {
@@ -931,6 +967,8 @@ const CLICK_ACTIONS = {
     'remove-exchange':   (el) => removeExchange(el.dataset.id, el.dataset.name),
     'delete-note':       (el) => deleteNote(el.dataset.id),
     'delete-trade':      (el) => deleteTrade(el.dataset.id),
+    'load-demo':         () => loadDemo(),
+    'remove-demo':       () => removeDemo(),
     'close-toast':       (el) => el.closest('.toast')?.remove(),
 };
 
@@ -1420,6 +1458,8 @@ async function updateGlobalSyncStatus() {
 
 // ---- Event Listeners ----
 document.addEventListener('DOMContentLoaded', () => {
+    refreshDemoBanner();
+
     // Nav links
     document.querySelectorAll('.nav-link').forEach(link => {
         link.addEventListener('click', e => {

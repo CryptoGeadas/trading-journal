@@ -69,6 +69,12 @@
 
         <!-- Main Content -->
         <main class="main-content">
+            <!-- Shown on every page while demo data is loaded -->
+            <div class="alert alert-warning demo-banner" id="demo-banner" style="display: none">
+                <span class="alert-icon">◈</span>
+                <span class="alert-text"><strong>Demo data.</strong> These trades are made up, so you can explore the journal. Your own trades are never mixed in.</span>
+                <button class="btn btn-secondary btn-sm" data-action="remove-demo">Remove demo data</button>
+            </div>
 
             <!-- ==================== OVERVIEW ==================== -->
             <section class="page active" id="page-overview">
@@ -129,8 +135,11 @@
                 <div class="empty-state" id="overview-empty">
                     <div class="empty-icon">◈</div>
                     <h3>No trades yet</h3>
-                    <p>Connect an exchange to start tracking your trades.</p>
-                    <button class="btn btn-primary" data-action="navigate" data-target="exchanges">Add Exchange</button>
+                    <p>Connect an exchange to start tracking your trades, or look around with demo data first.</p>
+                    <div class="form-row" style="justify-content: center">
+                        <button class="btn btn-primary" data-action="navigate" data-target="exchanges">Add Exchange</button>
+                        <button class="btn btn-secondary" data-action="load-demo">Load demo data</button>
+                    </div>
                 </div>
 
                 <!-- Equity Curve -->
@@ -551,6 +560,18 @@
                             Restore Backup
                             <input type="file" accept=".zip" style="display:none" data-change="restore-backup">
                         </label>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 1.5rem">
+                    <h3 class="card-title">Demo Data</h3>
+                    <p class="form-note" style="margin-top: 0; margin-bottom: 0.75rem">
+                        Six months of made-up spot and futures trades, with strategies, tags, ratings and notes. It is marked as demo everywhere,
+                        never synced, and removed in one click without touching your own data.
+                    </p>
+                    <div class="form-row">
+                        <button class="btn btn-secondary" data-action="load-demo" id="btn-load-demo">Load demo data</button>
+                        <button class="btn btn-secondary" data-action="remove-demo" id="btn-remove-demo" style="display: none">Remove demo data</button>
                     </div>
                 </div>
 

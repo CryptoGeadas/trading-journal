@@ -578,6 +578,16 @@ tr.expandable {
 }
 
 /* ---- Notices ---- */
+.demo-banner {
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.demo-banner .alert-text {
+    flex: 1;
+}
+
 .notice {
     padding: 0.85rem 1rem;
     border-radius: var(--radius-sm);
