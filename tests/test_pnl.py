@@ -1,15 +1,17 @@
-"""Tests for the FIFO PnL matching engine."""
+"""Engine-level tests for FIFO matching (app.services.pnl_engine)."""
 
+from datetime import datetime, timedelta
 from itertools import count
 
 from app.services import pnl_engine
 
 _clock = count()
+_START = datetime(2026, 1, 1)
 
 
 def _trade(side, qty, price, fee=0.0):
-    return {"side": side, "quantity": qty, "price": price, "fee": fee, "pair": "BTC/USDT",
-            "trade_type": "spot", "exchange": "x", "timestamp": f"2026-01-01T00:00:{next(_clock):02d}Z"}
+    return {"side": side, "quantity": qty, "price": price, "fee": fee, "fee_currency": "USDT", "pair": "BTC/USDT",
+            "trade_type": "spot", "exchange": "x", "timestamp": (_START + timedelta(minutes=next(_clock))).strftime("%Y-%m-%dT%H:%M:%SZ")}
 
 
 def _fifo_match(pair, trades):
@@ -135,3 +137,17 @@ class TestFifoMatch:
         result = _fifo_match("BTC/USDT", trades)
         assert result["total_win_amount"] == 50.0
         assert result["total_loss_amount"] == -20.0
+
+
+def test_a_fill_with_no_quantity_is_skipped_not_a_closed_trade():
+    trades = [_trade("buy", 1.0, 100.0), _trade("sell", 0.0, 150.0), _trade("sell", 5e-9, 100.0),
+              _trade("sell", 1.0, 100.0)]
+    result = _fifo_match("BTC/USDT", trades)
+    assert (result["closed_trades"], result["realised_pnl"]) == (1, 0.0)
+
+
+def test_fee_with_no_coin_named_is_unknown():
+    trades = [_trade("buy", 1.0, 100.0, fee=1.0), _trade("sell", 1.0, 150.0)]
+    trades[0]["fee_currency"] = ""
+    result = pnl_engine.match(trades)
+    assert result.closed[0].fee_unknown and result.closed[0].pnl == 50.0

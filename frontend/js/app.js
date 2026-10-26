@@ -39,17 +39,24 @@ function loadPageData(page) {
 // ---- Overview ----
 async function loadOverview() {
     try {
-        const data = await API.overview();
-        setText('stat-total-pnl',     formatCurrency(data.total_pnl));
-        setText('stat-pnl-month',     formatCurrency(data.pnl_this_month));
-        setText('stat-pnl-week',      formatCurrency(data.pnl_this_week));
-        setText('stat-win-rate',      data.win_rate > 0 ? `${data.win_rate}%` : '—');
-        setText('stat-total-fees',    formatCurrency(data.total_fees));
+        const data = await API.overview(pnlSettings());
+        const cur = data.currency;
+        setText('stat-total-pnl',     formatCurrency(data.total_pnl, cur));
+        setText('stat-pnl-month',     formatCurrency(data.pnl_this_month, cur));
+        setText('stat-pnl-week',      formatCurrency(data.pnl_this_week, cur));
+        setText('stat-win-rate',      data.closed_trades > 0 ? `${data.win_rate}%` : '—');
+        setText('stat-total-fees',    formatCurrency(data.total_fees, cur)
+            + (data.fees_unknown > 0 ? ` + ${data.fees_unknown} unknown` : ''));
+        let pnlNote = currencyNote(cur, data.other_currencies);
+        if (data.unmatched_sells > 0) {
+            pnlNote += ` ${data.unmatched_sells} sale${data.unmatched_sells > 1 ? 's' : ''} with no buy on record not counted (cost unknown).`;
+        }
+        setText('stat-pnl-note',      pnlNote);
         setText('stat-exchanges',     data.connected_exchanges);
         setText('stat-best-pair',     data.best_pair || '—');
         setText('stat-worst-pair',    data.worst_pair || '—');
-        setText('stat-trades-month',  `${data.trades_this_month} trades`);
-        setText('stat-trades-week',   `${data.trades_this_week} trades`);
+        setText('stat-trades-month',  `${data.trades_this_month} trades` + otherAmounts(data.month_other_currencies));
+        setText('stat-trades-week',   `${data.trades_this_week} trades` + otherAmounts(data.week_other_currencies));
         setText('stat-total-trades',  `${data.total_trades} total trades`);
 
         // Colour PnL values
@@ -74,7 +81,7 @@ async function loadOverview() {
 
 async function loadEquityCurve() {
     try {
-        const data = await API.equityCurve();
+        const data = await API.equityCurve(pnlSettings());
         const card = document.getElementById('equity-curve-card');
         if (!data || data.length < 2) {
             if (card) card.style.display = 'none';
@@ -109,6 +116,7 @@ async function loadEquityCurve() {
         });
 
         series.setData(data.map(d => ({ time: d.date, value: d.cumulative_pnl })));
+        setText('equity-currency', `In ${currencyName(data[0].currency)}.`);
         chart.timeScale().fitContent();
 
         new ResizeObserver(() => {
@@ -153,14 +161,16 @@ function checkStaleSyncWarning(overviewData) {
 async function loadPnl() {
     const groupBy = document.getElementById('pnl-group-by')?.value || 'pair';
     try {
-        const data = await API.pnl({ group_by: groupBy });
+        const data = await API.pnl({ group_by: groupBy, ...pnlSettings() });
+        const cur = data.currency;
 
-        setText('pnl-total', formatCurrency(data.total_pnl));
+        setText('pnl-total', formatCurrency(data.total_pnl, cur));
         setText('pnl-win-rate', data.trade_count > 0 ? `${data.win_rate}%` : '—');
-        setText('pnl-profit-factor', data.profit_factor > 0 ? data.profit_factor : '—');
+        setText('pnl-profit-factor', data.trade_count === 0 ? '—' : (data.profit_factor === null ? 'No losses' : data.profit_factor));
         setText('pnl-trade-count', data.trade_count);
-        setText('pnl-avg-win', formatCurrency(data.avg_win));
-        setText('pnl-avg-loss', formatCurrency(data.avg_loss));
+        setText('pnl-avg-win', formatCurrency(data.avg_win, cur));
+        setText('pnl-avg-loss', formatCurrency(data.avg_loss, cur));
+        renderPnlNotes(data);
         setText('pnl-best-pair', data.best_pair || '—');
         setText('pnl-worst-pair', data.worst_pair || '—');
 
@@ -187,13 +197,79 @@ async function loadPnl() {
             <tr>
                 <td><strong>${esc(b.group)}</strong></td>
                 <td class="mono">${esc(b.trade_count)}</td>
-                <td class="mono ${pnlClass}">${esc(formatCurrency(b.total_pnl))}</td>
-                <td class="mono">${esc(formatCurrency(b.total_fees))}</td>
+                <td class="mono ${pnlClass}">${esc(formatCurrency(b.total_pnl, b.currency))}</td>
+                <td class="mono">${esc(formatCurrency(b.total_fees, b.currency))}</td>
                 <td class="mono">${esc(b.win_rate)}%</td>
             </tr>`;
         }).join('');
     } catch (err) {
         console.error('Failed to load PnL:', err);
+    }
+}
+
+// Lines under the PnL numbers: funding, other currencies, what is unknown.
+function renderPnlNotes(data) {
+    const el = document.getElementById('pnl-notes');
+    if (!el) return;
+    const cur = data.currency;
+    const lines = [];
+    if (data.funding_pnl) {
+        lines.push(`Includes funding: ${formatCurrency(data.funding_pnl, cur)} (trades: ${formatCurrency(data.trading_pnl, cur)}).`);
+    }
+    const others = (data.by_currency || []).filter(c => c.currency !== cur);
+    lines.push(currencyNote(cur, others));
+    if (data.unmatched_sells > 0) {
+        const many = data.unmatched_sells > 1;
+        lines.push(`${data.unmatched_sells} sale${many ? 's have' : ' has'} no buy on record, so the cost is unknown. ${many ? 'They are' : 'It is'} not counted.`);
+    }
+    if (data.fee_unknown_trades > 0) {
+        lines.push(`${data.fee_unknown_trades} trade${data.fee_unknown_trades > 1 ? 's' : ''} paid a fee in another coin (e.g. BNB). That fee is unknown and left out.`);
+    }
+    el.textContent = lines.filter(Boolean).join(' ');
+}
+
+function currencyName(cur) {
+    return cur === 'USD' ? 'USD (USDT, USDC and other dollar stablecoins count as one)' : cur;
+}
+
+// Says which currency the numbers are in, and lists the others (never added in).
+function currencyNote(cur, others = []) {
+    let note = `Amounts in ${currencyName(cur)}.`;
+    if (others && others.length) {
+        note += ' Not included: ' + others.map(c => `${formatCurrency(c.total_pnl, c.currency)} from ${c.currency} pairs`).join(', ') + '.';
+    }
+    return note;
+}
+
+// ", plus 0.01 BTC" for period amounts in currencies not shown in the card.
+function otherAmounts(others = []) {
+    if (!others || !others.length) return '';
+    return ', plus ' + others.map(c => formatCurrency(c.total_pnl, c.currency)).join(', ');
+}
+
+// PnL method and main currency chosen on the Settings page, kept in this browser.
+const SETTINGS_KEY = 'tj-pnl-settings';
+
+function pnlSettings() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+        const out = {};
+        if (['fifo', 'avg_cost'].includes(saved.method)) out.method = saved.method;
+        if (typeof saved.currency === 'string' && /^[A-Z]{0,10}$/.test(saved.currency) && saved.currency) out.currency = saved.currency;
+        return out;
+    } catch (err) {
+        return {};  // storage blocked or broken: use the defaults
+    }
+}
+
+function saveSetting(key, value) {
+    const settings = pnlSettings();
+    if (value) settings[key] = value; else delete settings[key];
+    try {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        showToast('Saved.', 'success');
+    } catch (err) {
+        showToast('This browser blocks saving settings, so the choice is lost on reload.', 'error');
     }
 }
 
@@ -308,7 +384,7 @@ function renderTradesTable(trades) {
             <td class="${sideClass(t.side)}">${esc(t.side.toUpperCase())}</td>
             <td class="mono">${esc(formatQty(t.quantity))}</td>
             <td class="mono">${esc(formatPrice(t.price))}</td>
-            <td class="mono">${esc(formatCurrency(t.total))}</td>
+            <td class="mono">${esc(formatCurrency(t.total, t.quote_currency))}</td>
             <td class="mono">${esc(formatFee(t.fee, t.fee_currency))}</td>
             <td class="strategy-cell" data-action="tag-popup" data-id="${esc(t.id)}" data-strategy="${esc(t.strategy || '')}">${strategyCell}</td>
             <td class="screenshots-cell" id="ss-${esc(t.id)}" data-action="none">
@@ -349,7 +425,7 @@ async function toggleFills(orderId, toggleEl) {
                 <td class="${sideClass(f.side)}">${esc(f.side.toUpperCase())}</td>
                 <td class="mono">${esc(formatQty(f.quantity))}</td>
                 <td class="mono">${esc(formatPrice(f.price))}</td>
-                <td class="mono">${esc(formatCurrency(f.total))}</td>
+                <td class="mono">${esc(formatCurrency(f.total, f.quote_currency))}</td>
                 <td class="mono">${esc(formatFee(f.fee, f.fee_currency))}</td>
                 <td></td>
                 <td></td>
@@ -483,6 +559,11 @@ async function removeExchange(id, name) {
 
 // ---- Settings ----
 async function loadSettings() {
+    const saved = pnlSettings();
+    const method = document.getElementById('setting-pnl-method');
+    if (method) method.value = saved.method || '';
+    const currency = document.getElementById('setting-quote-currency');
+    if (currency) currency.value = saved.currency || '';
     try {
         const health = await API.health();
         setText('info-version', health.version || '—');
@@ -518,10 +599,17 @@ function closeModal(id) {
 }
 
 // ---- Formatting Helpers ----
-function formatCurrency(val) {
-    if (val === null || val === undefined) return '$0.00';
+// Dollar stablecoins show as $; every other currency keeps its own ticker.
+const USD_STABLES = ['USD', 'USDT', 'USDC', 'BUSD', 'FDUSD', 'TUSD', 'DAI', 'USDP', 'USDE', 'PYUSD'];
+
+function formatCurrency(val, currency = 'USD') {
+    if (val === null || val === undefined) return '—';
     const sign = val >= 0 ? '' : '-';
-    return `${sign}$${Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const cur = (currency || 'USD').toUpperCase();
+    if (USD_STABLES.includes(cur)) {
+        return `${sign}$${Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    return `${sign}${Math.abs(val).toLocaleString('en-US', { maximumFractionDigits: 8 })} ${cur}`;
 }
 
 function formatQty(val) {
@@ -842,6 +930,7 @@ const CLICK_ACTIONS = {
 const CHANGE_ACTIONS = {
     'upload-screenshot': (el) => uploadScreenshot(el.dataset.id, el.files[0]),
     'restore-backup':    (el) => restoreBackup(el.files[0]),
+    'save-setting':      (el) => saveSetting(el.dataset.key, el.value),
     'note-title':        (el) => updateNote(el.dataset.id, { title: el.value }),
 };
 
@@ -926,7 +1015,7 @@ function closeLightbox() {
 // ---- Patterns ----
 async function loadPatterns() {
     try {
-        const data = await API.patterns();
+        const data = await API.patterns(pnlSettings());
         const section = document.getElementById('patterns-section');
         const container = document.getElementById('patterns-container');
         if (!section || !container) return;
@@ -953,8 +1042,8 @@ async function loadPatterns() {
                 const worst = p.data.worst_hour;
                 detailHtml = `
                     <div class="pattern-stats">
-                        ${best ? `<span>Best hour: <strong>${esc(best.hour)}:00 UTC</strong> (${esc(formatCurrency(best.pnl))})</span>` : ''}
-                        ${worst ? `<span>Worst hour: <strong>${esc(worst.hour)}:00 UTC</strong> (${esc(formatCurrency(worst.pnl))})</span>` : ''}
+                        ${best ? `<span>Best hour: <strong>${esc(best.hour)}:00 UTC</strong> (${esc(formatCurrency(best.pnl, p.data.currency))})</span>` : ''}
+                        ${worst ? `<span>Worst hour: <strong>${esc(worst.hour)}:00 UTC</strong> (${esc(formatCurrency(worst.pnl, p.data.currency))})</span>` : ''}
                     </div>`;
             } else if (p.type === 'hold_time' && p.data) {
                 detailHtml = `
@@ -1147,7 +1236,7 @@ function openTradeDetail(tradeId, tradeData) {
                 <div class="detail-item"><span class="detail-label">Side</span><span class="detail-value ${sideClass(tradeData.side)}">${esc(tradeData.side.toUpperCase())}</span></div>
                 <div class="detail-item"><span class="detail-label">Quantity</span><span class="detail-value mono">${esc(formatQty(tradeData.quantity))}</span></div>
                 <div class="detail-item"><span class="detail-label">Price</span><span class="detail-value mono">${esc(formatPrice(tradeData.price))}</span></div>
-                <div class="detail-item"><span class="detail-label">Total</span><span class="detail-value mono">${esc(formatCurrency(tradeData.total))}</span></div>
+                <div class="detail-item"><span class="detail-label">Total</span><span class="detail-value mono">${esc(formatCurrency(tradeData.total, tradeData.quote_currency))}</span></div>
                 <div class="detail-item"><span class="detail-label">Fee</span><span class="detail-value mono">${esc(formatFee(tradeData.fee, tradeData.fee_currency))}</span></div>
             </div>`;
     }

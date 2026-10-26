@@ -1,13 +1,21 @@
 """Overview endpoint — summary stats for the dashboard."""
 
-from fastapi import APIRouter
+from typing import Optional
+
+from fastapi import APIRouter, Query
+from app.api.routes_pnl import METHOD_PATTERN, _calculate_pnl, match_all
 from app.database import get_db
+from app.services import pnl_engine
+from app.services.pnl_engine import money_round
 
 router = APIRouter()
 
 
 @router.get("/overview")
-async def get_overview():
+async def get_overview(
+    method: Optional[str] = Query(None, pattern=METHOD_PATTERN),
+    currency: Optional[str] = None,
+):
     """Return high-level stats for the overview screen, including real PnL."""
     db = get_db()
     try:
@@ -35,26 +43,30 @@ async def get_overview():
             "SELECT COUNT(DISTINCT COALESCE(order_id, id)) FROM trades WHERE timestamp >= date('now', 'weekday 0', '-7 days')"
         ).fetchone()[0]
 
-        # Total fees
-        total_fees = db.execute(
-            "SELECT COALESCE(SUM(fee), 0) FROM trades"
-        ).fetchone()[0]
+        # PnL (and fees) in one currency; other currencies are listed, never added in.
+        matched = match_all(method)
+        fills = matched[1]
+        pnl_all = _calculate_pnl(method=method, currency=currency, matched=matched)
+        main = pnl_all["currency"]
+        pnl_month = _calculate_pnl(date_from=_start_of_month(), method=method, currency=main, matched=matched)
+        pnl_week = _calculate_pnl(date_from=_start_of_week(), method=method, currency=main, matched=matched)
 
-        # Calculate PnL using FIFO (import inline to avoid circular deps)
-        from app.api.routes_pnl import _calculate_pnl
+        fees, fees_unknown = pnl_engine.fees_paid(fills, main)
 
-        pnl_all = _calculate_pnl()
-        pnl_month = _calculate_pnl(
-            date_from=_start_of_month(),
-        )
-        pnl_week = _calculate_pnl(
-            date_from=_start_of_week(),
-        )
+        def others(result):
+            return [c for c in result["by_currency"] if c["currency"] != main]
 
         return {
             "total_trades": total_trades,
+            "closed_trades": pnl_all["trade_count"],
             "total_pnl": pnl_all["total_pnl"],
-            "total_fees": round(total_fees, 2),
+            "currency": main,
+            "other_currencies": others(pnl_all),
+            "month_other_currencies": others(pnl_month),
+            "week_other_currencies": others(pnl_week),
+            "unmatched_sells": pnl_all["unmatched_sells"],
+            "total_fees": money_round(fees, main),
+            "fees_unknown": fees_unknown,
             "win_rate": pnl_all["win_rate"],
             "connected_exchanges": connected,
             "last_sync": last_sync,

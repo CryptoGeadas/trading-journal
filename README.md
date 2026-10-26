@@ -45,8 +45,7 @@ cp .env.example .env
 | `HOST` | `127.0.0.1` | Who can open the journal. `127.0.0.1` = only this computer. `0.0.0.0` makes it reachable from your whole network (a warning is shown; set `AUTH_USER`/`AUTH_PASS` too) |
 | `PORT` | `8000` | Server port |
 | `SYNC_INTERVAL_HOURS` | `6` | How often to pull new trades from exchanges |
-| `DEFAULT_QUOTE_CURRENCY` | `USDT` | Default quote currency for display |
-| `DEFAULT_PNL_METHOD` | `fifo` | PnL calculation method (`fifo` or `avg_cost`) |
+| `DEFAULT_PNL_METHOD` | `fifo` | PnL method (`fifo` or `avg_cost`) when none is chosen on the Settings page |
 | `AUTH_USER` | *(empty)* | Basic auth username (leave empty to disable auth) |
 | `AUTH_PASS` | *(empty)* | Basic auth password (leave empty to disable auth) |
 | `BACKUP_RETENTION_COUNT` | `7` | Number of auto-backups to keep |

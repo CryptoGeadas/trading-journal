@@ -88,6 +88,7 @@
                         <span class="stat-label">Total PnL</span>
                         <span class="stat-value" id="stat-total-pnl">$0.00</span>
                         <span class="stat-note">All time</span>
+                        <span class="stat-note" id="stat-pnl-note"></span>
                     </div>
                     <div class="stat-card">
                         <span class="stat-label">This Month</span>
@@ -136,6 +137,7 @@
                 <div id="equity-curve-card" style="display: none; margin-top: 1.5rem">
                     <h3 class="card-title">Equity Curve</h3>
                     <div id="equity-chart" style="height: 300px;"></div>
+                    <p class="form-note" id="equity-currency"></p>
                     <p class="form-note">Chart by TradingView Lightweight Charts™ · <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer">tradingview.com</a></p>
                 </div>
 
@@ -282,6 +284,8 @@
                         <span class="stat-value" id="pnl-worst-pair">—</span>
                     </div>
                 </div>
+
+                <p class="form-note" id="pnl-notes"></p>
 
                 <!-- PnL breakdown table -->
                 <div class="card">
@@ -511,20 +515,24 @@
                 <div class="card">
                     <h3 class="card-title">Display Preferences</h3>
                     <div class="form-group">
-                        <label>Default Quote Currency</label>
-                        <select class="filter-select" id="setting-quote-currency">
-                            <option value="USDT">USDT</option>
-                            <option value="USD">USD</option>
-                            <option value="EUR">EUR</option>
+                        <label for="setting-quote-currency">Main PnL currency</label>
+                        <select class="filter-select" id="setting-quote-currency" data-change="save-setting" data-key="currency">
+                            <option value="">Automatic (the one most trades use)</option>
+                            <option value="USD">USD (USDT, USDC and other dollar stablecoins)</option>
                             <option value="BTC">BTC</option>
+                            <option value="ETH">ETH</option>
+                            <option value="EUR">EUR</option>
                         </select>
+                        <p class="form-note">PnL in other currencies is listed next to it, never added in.</p>
                     </div>
                     <div class="form-group">
-                        <label>Default PnL Method</label>
-                        <select class="filter-select" id="setting-pnl-method">
-                            <option value="fifo">FIFO</option>
-                            <option value="avg_cost">Average Cost</option>
+                        <label for="setting-pnl-method">PnL method</label>
+                        <select class="filter-select" id="setting-pnl-method" data-change="save-setting" data-key="method">
+                            <option value="">Default (DEFAULT_PNL_METHOD, FIFO unless set)</option>
+                            <option value="fifo">FIFO (oldest buy is sold first)</option>
+                            <option value="avg_cost">Average cost</option>
                         </select>
+                        <p class="form-note">Saved in this browser. Used on the Overview and PnL pages.</p>
                     </div>
                 </div>
 

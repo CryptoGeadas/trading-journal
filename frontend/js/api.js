@@ -63,7 +63,7 @@ const API = {
     },
 
     // Convenience methods
-    overview:     ()            => API.get('/overview'),
+    overview:     (params = {}) => API.get('/overview', params),
     trades:       (params = {}) => API.get('/trades', params),
     trade:        (id)          => API.get(`/trades/${id}`),
     fills:        (orderId)     => API.get(`/trades/fills/${orderId}`),
@@ -93,7 +93,7 @@ const API = {
     },
     fundingFees:      (params = {}) => API.get('/funding-fees', params),
     fundingSummary:   (params = {}) => API.get('/funding-fees/summary', params),
-    patterns:         ()            => API.get('/patterns'),
+    patterns:         (params = {}) => API.get('/patterns', params),
     notes:            ()            => API.get('/notes'),
     createNote:       (body)        => API.post('/notes', body),
     updateNote:       (id, body)    => API.patch(`/notes/${id}`, body),
