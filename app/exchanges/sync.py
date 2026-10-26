@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+from app import timeutil
 from app.database import get_db
 from app.exchanges.connector import create_client, get_adapter, ExchangeError
 from app.exchanges.base import ExchangeAdapter
@@ -180,10 +181,12 @@ def _insert_trades(
 
         ts = t.get("timestamp", 0)
         if ts:
-            dt = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
-            timestamp_str = dt.isoformat()
+            timestamp_str = timeutil.from_ms(ts)
+        elif t.get("datetime"):
+            timestamp_str = timeutil.to_utc(t["datetime"])
         else:
-            timestamp_str = t.get("datetime", datetime.now(timezone.utc).isoformat())
+            print(f"[sync] Warning: trade {external_id} has no time, skipped")
+            continue
 
         amount = float(t.get("amount", 0) or 0)
         price = float(t.get("price", 0) or 0)

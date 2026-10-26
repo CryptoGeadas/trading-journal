@@ -226,14 +226,12 @@ def test_date_filter_keeps_the_cost_of_earlier_buys(api):
     assert pnl(api, date_from="2026-01-02")["total_pnl"] == 50
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="wrong today, see #26")
 def test_date_to_includes_the_whole_last_day(api):
     add(api, "buy", 1, 100, "2026-01-01T00:00:00Z")
     add(api, "sell", 1, 150, "2026-01-31T12:00:00Z")
     assert pnl(api, date_to="2026-01-31")["total_pnl"] == 50  # the page sends a date, not a time
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="wrong today, see #27")
 def test_time_zones_are_compared_as_real_moments(api):
     add(api, "buy", 1, 100, "2026-01-01T00:00:00Z")
     # 01:00 at UTC+2 is 23:00 UTC the day BEFORE the buy: nothing to sell yet
@@ -571,3 +569,41 @@ def test_overview_counts_unknown_fees_and_unmatched_sales(api):
     add(api, "sell", 2, 150, "2026-01-02T00:00:00Z")
     o = api.get("/api/overview").json()
     assert (o["fees_unknown"], o["unmatched_sells"], o["closed_trades"]) == (1, 1, 1)
+
+
+
+def test_date_to_includes_the_whole_last_day_everywhere(api):
+    pair = "BTC/USDT:USDT"
+    add(api, "buy", 1, 100, "2026-01-01T00:00:00Z", pair=pair, trade_type="futures")
+    add(api, "sell", 1, 150, "2026-01-31T12:00:00Z", pair=pair, trade_type="futures")
+    fund(-2, "2026-01-31T16:00:00Z", pair=pair)
+    assert pnl(api, date_to="2026-01-31")["total_pnl"] == 48
+    assert api.get("/api/equity-curve", params={"date_to": "2026-01-31"}).json()[-1]["cumulative_pnl"] == 48
+    assert api.get("/api/funding-fees", params={"date_to": "2026-01-31"}).json()["total"] == 1
+    assert api.get("/api/trades", params={"date_to": "2026-01-31"}).json()["total"] == 2
+    assert pnl(api, date_to="2026-01-30")["total_pnl"] == 0
+
+
+def test_a_time_with_an_offset_is_stored_as_utc(api):
+    add(api, "buy", 1, 100, "2026-02-01T01:00:00+02:00")
+    stored = api.get("/api/trades").json()["trades"][0]["timestamp"]
+    assert stored == "2026-01-31T23:00:00.000Z"
+
+
+def test_month_grouping_uses_the_utc_moment(api):
+    add(api, "buy", 1, 100, "2026-01-10T00:00:00Z")
+    add(api, "sell", 1, 150, "2026-02-01T01:00:00+02:00")  # 31 January in UTC
+    months = {g["group"]: g["total_pnl"] for g in pnl(api, group_by="month")["breakdown"]}
+    assert months == {"2026-01": 50}
+
+
+@pytest.mark.parametrize("bad", ["yesterday", "2026-13-01"])
+def test_a_bad_date_filter_is_refused(api, bad):
+    assert api.get("/api/pnl", params={"date_from": bad}).status_code == 400
+    assert api.get("/api/trades", params={"date_to": bad}).status_code == 400
+
+
+def test_a_bad_trade_time_is_refused(api):
+    resp = api.post("/api/trades", json={"pair": "BTC/USDT", "side": "buy", "quantity": 1, "price": 1,
+                                         "timestamp": "next tuesday"})
+    assert resp.status_code == 400

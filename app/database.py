@@ -4,7 +4,7 @@ import sqlite3
 import uuid
 from app import paths
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 MIGRATIONS = {
     1: """
@@ -164,7 +164,35 @@ MIGRATIONS = {
 
     PRAGMA user_version = 8;
     """,
+    # 9: every trade and funding time in one UTC format (Python step below).
+    9: "PRAGMA user_version = 9;",
 }
+
+
+def _normalise_timestamps(conn: sqlite3.Connection):
+    """Rewrite stored times as UTC `...000Z` so text order is time order."""
+    from app import timeutil
+
+    for table in ("trades", "funding_fees"):
+        rows = conn.execute(f"SELECT id, timestamp FROM {table}").fetchall()
+        for row_id, ts in rows:
+            try:
+                new = timeutil.to_utc(ts)
+            except ValueError:
+                print(f"[db] Warning: {table} row {row_id} has an unreadable time {ts!r}; left as it is")
+                continue
+            if new == ts:
+                continue
+            try:
+                conn.execute(f"UPDATE {table} SET timestamp = ? WHERE id = ?", [new, row_id])
+            except sqlite3.IntegrityError:
+                # Same payment stored twice in two formats: keep one.
+                conn.execute(f"DELETE FROM {table} WHERE id = ?", [row_id])
+    conn.commit()
+
+
+# Python steps that run right after a migration's SQL.
+MIGRATION_STEPS = {9: _normalise_timestamps}
 
 
 _DEFAULT_EMOTION_TAGS = [
@@ -213,6 +241,8 @@ def init_db():
             print(f"[db] Applied migration v{version}")
             if version == 7:
                 _seed_emotion_tags(conn)
+            if version in MIGRATION_STEPS:
+                MIGRATION_STEPS[version](conn)
 
     conn.close()
     print(f"[db] Database ready at {paths.db_path()} (v{SCHEMA_VERSION})")

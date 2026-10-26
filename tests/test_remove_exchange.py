@@ -85,7 +85,7 @@ def test_removing_twice_or_unknown_gives_404(api):
 def test_existing_journal_upgrades_and_keeps_its_connections(tmp_path, monkeypatch):
     import sqlite3
     from app import paths
-    from app.database import MIGRATIONS, init_db
+    from app.database import MIGRATIONS, SCHEMA_VERSION, init_db
 
     root = tmp_path / "old-journal"
     root.mkdir()
@@ -100,6 +100,6 @@ def test_existing_journal_upgrades_and_keeps_its_connections(tmp_path, monkeypat
     init_db()
 
     conn = sqlite3.connect(root / "journal.db")
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 8
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     assert conn.execute("SELECT id, removed_at FROM exchanges").fetchall() == [("old", None)]
     conn.close()

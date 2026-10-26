@@ -4,12 +4,14 @@ import base64
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app import paths
 from app.database import init_db
+from app.services.pnl_engine import BadFilter
 from app.scheduler import start_scheduler, stop_scheduler
 from app.api.routes_overview import router as overview_router
 from app.api.routes_trades import router as trades_router
@@ -101,6 +103,11 @@ async def security_headers(request, call_next):
 
 
 # --- API routes ---
+@app.exception_handler(BadFilter)
+async def bad_filter(request: Request, exc: BadFilter):
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
 app.include_router(overview_router, prefix="/api")
 app.include_router(trades_router, prefix="/api")
 app.include_router(exchanges_router, prefix="/api")

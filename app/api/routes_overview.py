@@ -4,6 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Query
 from app.api.routes_pnl import METHOD_PATTERN, _calculate_pnl, match_all
+from app import timeutil
 from app.database import get_db
 from app.services import pnl_engine
 from app.services.pnl_engine import money_round
@@ -35,12 +36,13 @@ async def get_overview(
 
         # Trades this month
         trades_this_month = db.execute(
-            "SELECT COUNT(DISTINCT COALESCE(order_id, id)) FROM trades WHERE timestamp >= date('now', 'start of month')"
+            "SELECT COUNT(DISTINCT COALESCE(order_id, id)) FROM trades WHERE timestamp >= ?", [_start_of_month()]
         ).fetchone()[0]
 
         # Trades this week
+        # Same week start (Monday, UTC) as the week PnL below.
         trades_this_week = db.execute(
-            "SELECT COUNT(DISTINCT COALESCE(order_id, id)) FROM trades WHERE timestamp >= date('now', 'weekday 0', '-7 days')"
+            "SELECT COUNT(DISTINCT COALESCE(order_id, id)) FROM trades WHERE timestamp >= ?", [_start_of_week()]
         ).fetchone()[0]
 
         # PnL (and fees) in one currency; other currencies are listed, never added in.
@@ -87,11 +89,11 @@ async def get_overview(
 def _start_of_month():
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
-    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    return timeutil.format_utc(now.replace(day=1, hour=0, minute=0, second=0, microsecond=0))
 
 
 def _start_of_week():
     from datetime import datetime, timezone, timedelta
     now = datetime.now(timezone.utc)
     start = now - timedelta(days=now.weekday())
-    return start.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    return timeutil.format_utc(start.replace(hour=0, minute=0, second=0, microsecond=0))

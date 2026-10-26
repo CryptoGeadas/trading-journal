@@ -28,6 +28,8 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Iterable, Optional
 
+from app import timeutil
+
 DUST = 1e-8  # quantities below this count as zero
 
 METHODS = ("fifo", "avg_cost")
@@ -114,9 +116,17 @@ class MatchResult:
     funding: list[Funding] = field(default_factory=list)
 
 
+class BadFilter(ValueError):
+    """A filter value the API cannot use (answered with 400)."""
+
+
 @dataclass
 class TradeFilter:
-    """Filters from the query string, applied to closed trades (and fills)."""
+    """Filters from the query string, applied to closed trades (and fills).
+
+    Dates become [start, end) in the stored UTC format; a date-only
+    `date_to` includes that whole day.
+    """
 
     exchange: Optional[str] = None
     pair: Optional[str] = None
@@ -124,6 +134,12 @@ class TradeFilter:
     strategy: Optional[str] = None
     date_from: Optional[str] = None
     date_to: Optional[str] = None
+
+    def __post_init__(self):
+        try:
+            self._start, self._end = timeutil.filter_bounds(self.date_from, self.date_to)
+        except ValueError:
+            raise BadFilter("Dates must look like 2026-01-31 or 2026-01-31T12:00:00Z.") from None
 
     def keeps(self, exchange, pair, trade_type, strategy, timestamp) -> bool:
         if self.exchange and exchange != self.exchange:
@@ -138,9 +154,9 @@ class TradeFilter:
                     return False
             elif strategy != self.strategy:
                 return False
-        if self.date_from and timestamp < self.date_from:
+        if self._start and timestamp < self._start:
             return False
-        if self.date_to and timestamp > self.date_to:
+        if self._end and timestamp >= self._end:
             return False
         return True
 
@@ -168,12 +184,12 @@ class TradeFilter:
             else:
                 conditions.append("strategy = ?")
                 params.append(self.strategy)
-        if self.date_from:
+        if self._start:
             conditions.append("timestamp >= ?")
-            params.append(self.date_from)
-        if self.date_to:
-            conditions.append("timestamp <= ?")
-            params.append(self.date_to)
+            params.append(self._start)
+        if self._end:
+            conditions.append("timestamp < ?")
+            params.append(self._end)
         where = " WHERE " + " AND ".join(conditions) if conditions else ""
         return where, params
 

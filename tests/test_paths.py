@@ -266,3 +266,26 @@ def test_no_module_builds_a_path_into_the_repo():
         if f.name != "paths.py" and re.search(r"""/\s*["']data["']""", f.read_text(encoding="utf-8"))
     ]
     assert offenders == []
+
+
+
+def test_migration_9_rewrites_old_times_as_utc(tmp_path):
+    import sqlite3
+    from app.database import MIGRATIONS, MIGRATION_STEPS
+
+    conn = sqlite3.connect(str(tmp_path / "old.db"))
+    for version in range(1, 9):
+        conn.executescript(MIGRATIONS[version])
+    conn.execute("INSERT INTO exchanges (id, exchange, api_key_enc, api_secret_enc) VALUES ('x', 'binance', '', '')")
+    for i, ts in enumerate(["2026-01-01T01:00:00+02:00", "2026-01-01T00:00:00+00:00", "2026-01-01T00:00:00.5Z"]):
+        conn.execute(
+            """INSERT INTO trades (id, exchange_id, exchange, external_id, timestamp, pair, base_currency,
+               quote_currency, side, quantity, price, total) VALUES (?, 'x', 'binance', ?, ?, 'BTC/USDT',
+               'BTC', 'USDT', 'buy', 1, 1, 1)""", [f"t{i}", f"e{i}", ts])
+    conn.commit()
+    conn.executescript(MIGRATIONS[9])
+    MIGRATION_STEPS[9](conn)
+    stored = [r[0] for r in conn.execute("SELECT timestamp FROM trades ORDER BY timestamp")]
+    assert stored == ["2025-12-31T23:00:00.000Z", "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.500Z"]
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 9
+    conn.close()

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
+from app import timeutil
 from app.database import get_db
 from app.services.pnl_engine import TradeFilter
 from app.models import TradeOut, TradeUpdate, TradesPage, OrderOut, OrdersPage
@@ -244,7 +245,10 @@ async def create_manual_trade(body: ManualTradeCreate):
 
     trade_id = str(uuid.uuid4())
     external_id = f"manual_{trade_id[:8]}"
-    ts = body.timestamp or datetime.now(timezone.utc).isoformat()
+    try:
+        ts = timeutil.to_utc(body.timestamp) if body.timestamp else timeutil.now_utc()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Time must look like 2026-01-31T12:00:00Z (an offset like +02:00 is fine).")
     total = body.quantity * body.price
 
     db = get_db()
