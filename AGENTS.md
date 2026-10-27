@@ -58,6 +58,11 @@ unzip it, and go into the unzipped `trading-journal-main` folder.
 
 Expected: the folder has `AGENTS.md`, `pyproject.toml` and an `app` folder.
 
+On Windows, keep the folder path short (for example
+`C:\Users\<name>\trading-journal`). A deep folder can make Step 4 fail with
+"path too long". If the current folder is deep, ask the person before you use
+another place.
+
 ## Step 3 — Make a virtual environment
 
 ```
@@ -76,6 +81,14 @@ package (e.g. `sudo apt install python3.12-venv`) and run it again.
 
 Expected: a line starting with `Successfully installed` (it can take a
 minute). A notice about a newer pip version may come after it; that is fine.
+In PowerShell that notice goes to stderr and can make the command look
+failed: look for the `Successfully installed` line, not the exit code.
+
+If it fails:
+- `[WinError 206] The filename or extension is too long` (Windows): the folder
+  path is too long. Ask the person, then clone again into a short folder (see
+  Step 2) and repeat Steps 3 and 4 there. Delete the half-installed copy only
+  if the person agrees.
 
 ## Step 5 — Start the journal
 
