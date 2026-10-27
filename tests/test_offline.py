@@ -38,7 +38,8 @@ def test_bundled_files_exist_and_keep_their_licences():
     assert (vendor / "lightweight-charts" / "NOTICE").is_file()
     fonts = list((vendor / "fonts").glob("*.woff2"))
     assert fonts
-    assert (vendor / "fonts" / "OFL-DM-Sans.txt").is_file()
+    for licence in ("OFL-Chakra-Petch.txt", "OFL-Space-Grotesk.txt"):
+        assert (vendor / "fonts" / licence).is_file()
     assert (vendor / "fonts" / "OFL-JetBrains-Mono.txt").is_file()
 
 
@@ -56,9 +57,10 @@ def test_chart_library_attribution_is_shown():
     assert "TradingView Lightweight Charts" in html
 
 
-# The only outside address allowed in our own frontend files: the chart
-# library's required attribution link (a link the user may click, not a load).
-_ALLOWED_URLS = {"https://www.tradingview.com/"}
+# The only outside addresses allowed in our own frontend files: the chart
+# library's required attribution link and the "Made by" link to the site
+# (links the user may click, never loaded by the page).
+_ALLOWED_URLS = {"https://www.tradingview.com/", "https://bernardogeadas.com"}
 
 
 def test_no_outside_addresses_in_our_frontend_code():
@@ -75,7 +77,7 @@ def test_linked_bundled_files_are_served():
     client = TestClient(app)
     html = client.get("/").text
     linked = re.findall(r"""(?:src|href)=["'](/static/vendor/[^"']+)""", html)
-    assert len(linked) == 2  # fonts.css + chart library
+    assert len(linked) == 3  # fonts.css + site style snapshot + chart library
     fonts_css = client.get("/static/vendor/fonts/fonts.css")
     fonts = ["/static/vendor/fonts/" + f for f in re.findall(r"url\(\s*[\"']?([^\"')]+)", fonts_css.text)]
     for url in linked + fonts:
@@ -110,3 +112,12 @@ def test_bundled_font_css_only_points_at_files_next_to_it():
     css = (FRONTEND / "vendor" / "fonts" / "fonts.css").read_text(encoding="utf-8")
     for target in re.findall(r"url\(\s*[\"']?([^\"')]+)", css):
         assert "/" not in target and ":" not in target, target
+
+
+def test_the_app_stylesheet_uses_only_the_site_tokens():
+    """Colours and fonts come from vendor/site-style/site-tokens.css, never written into app.css."""
+    css = (Path(__file__).resolve().parent.parent / "frontend" / "css" / "app.css").read_text(encoding="utf-8")
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    assert not re.findall(r"#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(|oklch\(", css)
+    assert not re.findall(r"font-family:\s*['\"]", css)
+    assert "box-shadow" not in css and "gradient" not in css  # the site uses neither

@@ -1,46 +1,49 @@
 /* =========================================
-   Trading Journal — Dashboard Styles
-   Dark terminal aesthetic with warm accents
+   Trading Journal — app styles on the site's web style
+   Colours, fonts and radii come from vendor/site-style/site-tokens.css
+   (a snapshot of bernardogeadas.com). This file maps them onto the app's
+   own layout. Dark only; no shadows, no gradients, like the site.
    ========================================= */
 
 :root {
-    /* Base palette */
-    --bg-root:        #0c0d10;
-    --bg-surface:     #14151a;
-    --bg-raised:      #1c1d24;
-    --bg-hover:       #24252e;
-    --bg-modal:       rgba(0, 0, 0, 0.7);
+    /* Surfaces */
+    --bg-root:        var(--bg);
+    --bg-surface:     var(--panel);
+    --bg-raised:      color-mix(in oklch, var(--panel), var(--fg) 4%);
+    --bg-hover:       color-mix(in oklch, var(--panel), var(--fg) 7%);
+    --bg-modal:       color-mix(in oklch, var(--bg) 82%, transparent);
 
     /* Borders */
-    --border:         #2a2b33;
-    --border-light:   #35363f;
+    --border-light:   color-mix(in oklch, var(--border), var(--fg) 12%);
 
     /* Text */
-    --text-primary:   #e8e9ed;
-    --text-secondary: #8b8d98;
-    --text-muted:     #5c5e6a;
+    --text-primary:   var(--fg);
+    --text-secondary: var(--muted);
+    --text-muted:     color-mix(in oklch, var(--muted) 72%, var(--bg));
 
-    /* Accent */
-    --accent:         #6c9cfc;
-    --accent-dim:     rgba(108, 156, 252, 0.12);
-    --accent-hover:   #5a8af0;
+    /* Accent (--accent itself is the site's lime) */
+    --accent-dim:     color-mix(in oklch, var(--accent) 12%, transparent);
+    --accent-hover:   color-mix(in oklch, var(--accent), var(--fg) 15%);
 
     /* Semantic */
-    --green:          #34d399;
-    --green-dim:      rgba(52, 211, 153, 0.12);
-    --red:            #f87171;
-    --red-dim:        rgba(248, 113, 113, 0.12);
-    --yellow:         #fbbf24;
-    --yellow-dim:     rgba(251, 191, 36, 0.10);
+    --green:          var(--up);
+    --green-dim:      color-mix(in oklch, var(--up) 12%, transparent);
+    --red:            var(--down);
+    --red-dim:        color-mix(in oklch, var(--down) 12%, transparent);
+    --red-line:       color-mix(in oklch, var(--down) 30%, transparent);
+    --yellow:         var(--warn);
+    --yellow-dim:     color-mix(in oklch, var(--warn) 12%, transparent);
+    --yellow-line:    color-mix(in oklch, var(--warn) 30%, transparent);
+    --overlay:        color-mix(in oklch, var(--bg) 90%, transparent);
+    --overlay-ctl:    color-mix(in oklch, var(--fg) 15%, transparent);
 
-    /* Typography */
-    --font-sans:      'DM Sans', -apple-system, sans-serif;
-    --font-mono:      'JetBrains Mono', 'Fira Code', monospace;
+    /* Typography (--font-mono is the site's) */
+    --font-sans:      var(--font-body);
 
     /* Sizing */
     --sidebar-w:      220px;
-    --radius:         8px;
-    --radius-sm:      5px;
+    --radius:         var(--r-panel);
+    --radius-sm:      var(--r-ctl);
 }
 
 /* ---- Reset & Base ---- */
@@ -90,9 +93,11 @@ body {
 }
 
 .brand-text {
-    font-weight: 700;
-    font-size: 1.1rem;
-    letter-spacing: -0.02em;
+    font-family: var(--font-head);
+    font-weight: 600;
+    font-size: 1rem;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
 }
 
 .nav-list {
@@ -149,7 +154,6 @@ body {
 
 .sync-dot.connected {
     background: var(--green);
-    box-shadow: 0 0 6px rgba(52, 211, 153, 0.4);
 }
 
 .sync-dot.error {
@@ -160,6 +164,7 @@ body {
 .main-content {
     margin-left: var(--sidebar-w);
     flex: 1;
+    min-width: 0;  /* wide tables scroll inside their panel, never the page */
     padding: 2rem 2.5rem;
     max-width: 1200px;
 }
@@ -176,9 +181,10 @@ body {
 }
 
 .page-header h1 {
-    font-size: 1.6rem;
-    font-weight: 700;
-    letter-spacing: -0.03em;
+    font-family: var(--font-head);
+    font-size: 1.8rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
 }
 
 .page-subtitle {
@@ -216,7 +222,6 @@ body {
 
 .stat-card.primary {
     border-color: var(--accent);
-    background: linear-gradient(135deg, var(--accent-dim), var(--bg-surface));
 }
 
 .stat-card.small {
@@ -224,10 +229,11 @@ body {
 }
 
 .stat-label {
-    font-size: 0.78rem;
-    font-weight: 600;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 400;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.22em;
     color: var(--text-secondary);
     margin-bottom: 0.5rem;
 }
@@ -249,8 +255,8 @@ body {
     margin-top: 0.35rem;
 }
 
-.stat-value.positive { color: var(--green); text-shadow: 0 0 20px rgba(52, 211, 153, 0.15); }
-.stat-value.negative { color: var(--red); text-shadow: 0 0 20px rgba(248, 113, 113, 0.15); }
+.stat-value.positive { color: var(--green); }
+.stat-value.negative { color: var(--red); }
 
 /* ---- Cards ---- */
 .card {
@@ -261,10 +267,13 @@ body {
 }
 
 .card-title {
-    font-size: 1rem;
-    font-weight: 600;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--text-secondary);
     margin-bottom: 1rem;
-    letter-spacing: -0.01em;
 }
 
 /* ---- Buttons ---- */
@@ -274,9 +283,9 @@ body {
     gap: 0.4rem;
     padding: 0.55rem 1rem;
     border-radius: var(--radius-sm);
-    font-family: var(--font-sans);
+    font-family: var(--font-mono);
     font-size: 0.85rem;
-    font-weight: 600;
+    font-weight: 500;
     border: 1px solid transparent;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -289,7 +298,7 @@ body {
 
 .btn-primary {
     background: var(--accent);
-    color: #0c0d10;
+    color: var(--accent-fg);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -297,13 +306,13 @@ body {
 }
 
 .btn-secondary {
-    background: var(--bg-raised);
+    background: transparent;
     border-color: var(--border);
     color: var(--text-primary);
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background: var(--bg-hover);
+    border-color: var(--fg);
 }
 
 .btn-ghost {
@@ -318,12 +327,12 @@ body {
 
 .btn-danger {
     background: var(--red-dim);
-    border-color: rgba(248, 113, 113, 0.25);
+    border-color: var(--red-line);
     color: var(--red);
 }
 
 .btn-danger:hover:not(:disabled) {
-    background: rgba(248, 113, 113, 0.2);
+    background: var(--red-line);
 }
 
 .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.8rem; }
@@ -369,10 +378,11 @@ body {
 .data-table thead th {
     text-align: left;
     padding: 0.7rem 0.75rem;
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 400;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.16em;
     color: var(--text-secondary);
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
@@ -393,7 +403,7 @@ body {
 }
 
 .data-table tbody tr:nth-child(even) {
-    background: rgba(20, 21, 26, 0.3);
+    background: color-mix(in oklch, var(--bg) 30%, transparent);
 }
 
 .data-table tbody tr:hover {
@@ -514,7 +524,6 @@ tr.expandable {
     border-radius: var(--radius);
     width: 100%;
     max-width: 480px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
 }
 
 .modal-header {
@@ -597,7 +606,7 @@ tr.expandable {
 
 .notice.warning {
     background: var(--yellow-dim);
-    border: 1px solid rgba(251, 191, 36, 0.2);
+    border: 1px solid var(--yellow-line);
     color: var(--yellow);
 }
 
@@ -653,7 +662,7 @@ tr.expandable {
     padding: 1.25rem 1.5rem;
     display: flex;
     justify-content: space-between;
-    transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+    transition: border-color 0.15s;
     align-items: center;
     margin-bottom: 0.75rem;
 }
@@ -677,12 +686,10 @@ tr.expandable {
 
 .exchange-card:hover {
     border-color: var(--border-light);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    transform: translateY(-1px);
 }
 
 .exchange-card-stale {
-    border-color: rgba(251, 191, 36, 0.25);
+    border-color: var(--yellow-line);
 }
 
 .stale-tag {
@@ -713,8 +720,6 @@ tr.expandable {
 
 .strategy-card:hover {
     border-color: var(--border-light);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    transform: translateY(-1px);
 }
 
 .strategy-card-header {
@@ -793,7 +798,8 @@ tr.expandable {
 
 .colour-swatch.active {
     border-color: var(--text-primary);
-    box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px currentColor;
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
 }
 
 /* ---- Strategy Playbook Textarea ---- */
@@ -834,9 +840,9 @@ tr.expandable {
 }
 
 .type-badge.futures {
-    background: rgba(251, 191, 36, 0.12);
+    background: var(--yellow-dim);
     color: var(--yellow);
-    border: 1px solid rgba(251, 191, 36, 0.25);
+    border: 1px solid var(--yellow-line);
 }
 
 /* ---- PnL Table ---- */
@@ -907,7 +913,7 @@ tr.expandable {
     height: 16px;
     border-radius: 50%;
     background: var(--red);
-    color: #fff;
+    color: var(--fg);
     border: none;
     font-size: 9px;
     line-height: 1;
@@ -946,7 +952,7 @@ tr.expandable {
 .lightbox {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.85);
+    background: var(--overlay);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -958,16 +964,15 @@ tr.expandable {
     max-width: 90vw;
     max-height: 90vh;
     border-radius: var(--radius);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
 .lightbox-close {
     position: absolute;
     top: 1.5rem;
     right: 1.5rem;
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--overlay-ctl);
     border: none;
-    color: #fff;
+    color: var(--fg);
     font-size: 1.2rem;
     width: 36px;
     height: 36px;
@@ -980,7 +985,7 @@ tr.expandable {
 }
 
 .lightbox-close:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: var(--border-light);
 }
 
 /* ---- Trade Tag Popup ---- */
@@ -992,7 +997,6 @@ tr.expandable {
     background: var(--bg-surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
     min-width: 180px;
     overflow: hidden;
 }
@@ -1069,7 +1073,7 @@ tr.expandable {
 
 .alert-warning {
     background: var(--yellow-dim);
-    border: 1px solid rgba(251, 191, 36, 0.2);
+    border: 1px solid var(--yellow-line);
     color: var(--yellow);
 }
 
@@ -1103,7 +1107,6 @@ tr.expandable {
     font-size: 0.85rem;
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
     opacity: 0;
     transform: translateX(20px);
     transition: opacity 0.3s, transform 0.3s;
@@ -1163,13 +1166,11 @@ tr.expandable {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 1rem 1.25rem;
-    transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+    transition: border-color 0.15s;
 }
 
 .pattern-card:hover {
     border-color: var(--border-light);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    transform: translateY(-1px);
 }
 
 .pattern-header {
@@ -1351,3 +1352,19 @@ tr.expandable {
     .filter-bar { flex-direction: column; }
     .page-header { flex-direction: column; gap: 0.75rem; }
 }
+
+/* ---- Footer credit ---- */
+.made-by {
+    display: block;
+    margin-top: 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    text-decoration: none;
+}
+
+.made-by:hover { color: var(--accent); }
+
+::selection { background: var(--accent); color: var(--accent-fg); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

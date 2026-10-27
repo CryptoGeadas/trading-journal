@@ -123,6 +123,13 @@ async function loadOverview() {
     }
 }
 
+// Site palette for the chart library, which can't read oklch(): hex copies in site-tokens.css.
+function chartColours() {
+    const css = getComputedStyle(document.documentElement);
+    const get = name => css.getPropertyValue('--hex-' + name).trim();
+    return { panel: get('panel'), border: get('border'), muted: get('muted'), up: get('up'), down: get('down') };
+}
+
 async function loadEquityCurve() {
     try {
         const data = await API.equityCurve(pnlSettings());
@@ -136,21 +143,22 @@ async function loadEquityCurve() {
         const container = document.getElementById('equity-chart');
         container.innerHTML = '';
 
+        const c = chartColours();
         const chart = LightweightCharts.createChart(container, {
-            layout: { background: { color: '#14151a' }, textColor: '#8b8d98' },
-            grid: { vertLines: { color: '#2a2b33' }, horzLines: { color: '#2a2b33' } },
+            layout: { background: { color: c.panel }, textColor: c.muted, fontFamily: 'JetBrains Mono, monospace' },
+            grid: { vertLines: { color: c.border }, horzLines: { color: c.border } },
             width: container.clientWidth,
             height: 300,
             crosshair: { mode: LightweightCharts.CrosshairMode.Magnet },
-            rightPriceScale: { borderColor: '#2a2b33' },
-            timeScale: { borderColor: '#2a2b33' },
+            rightPriceScale: { borderColor: c.border },
+            timeScale: { borderColor: c.border },
         });
 
         const lastPnl = data[data.length - 1].cumulative_pnl;
         const isPositive = lastPnl >= 0;
-        const lineColor = isPositive ? '#34d399' : '#f87171';
-        const topColor = isPositive ? 'rgba(52, 211, 153, 0.25)' : 'rgba(248, 113, 113, 0.25)';
-        const bottomColor = isPositive ? 'rgba(52, 211, 153, 0.02)' : 'rgba(248, 113, 113, 0.02)';
+        const lineColor = isPositive ? c.up : c.down;
+        const topColor = lineColor + '40';     // 25% opacity
+        const bottomColor = lineColor + '05';  // about 2%
 
         const series = chart.addAreaSeries({
             lineColor: lineColor,
