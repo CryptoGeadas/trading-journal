@@ -74,8 +74,8 @@ package (e.g. `sudo apt install python3.12-venv`) and run it again.
 - Windows: `.venv\Scripts\python -m pip install .`
 - macOS / Linux: `.venv/bin/python -m pip install .`
 
-Expected: the last line starts with `Successfully installed` (it can take a
-minute). Warnings about a newer pip version are fine.
+Expected: a line starting with `Successfully installed` (it can take a
+minute). A notice about a newer pip version may come after it; that is fine.
 
 ## Step 5 — Start the journal
 
@@ -96,7 +96,8 @@ and the journal opens in the browser. This command keeps running; that is
 normal. Start it in the background (or a second terminal) so you can go on.
 
 Check it from another terminal: opening http://127.0.0.1:8000/health returns
-`{"status": "ok", ...}`.
+`{"status": "ok", ...}`. (With `--no-browser` the "is running at" line is not
+printed; use this check instead.)
 
 If it fails:
 - "port 8000 is already in use": the journal may already be running; open
