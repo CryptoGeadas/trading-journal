@@ -1,287 +1,147 @@
 # Trading Journal
 
-A self-hosted crypto trading journal that connects to your exchange accounts, syncs your trade history, and provides analytics through a browser dashboard.
+A crypto trading journal that runs **on your own computer**. It reads your
+trade history from your exchanges with read-only keys, and shows your real
+PnL, fees, funding, patterns and notes in your browser. Nothing is hosted
+anywhere: your trades and your keys never leave your computer.
 
 **Supported exchanges:** Binance (spot + USDT/USDC-margined futures) · Gate.io (spot) · Kraken (spot)
 
 ---
 
-## Quick Start
+## Install it with your coding agent
 
-### Requirements
+You don't need to type terminal commands. Open Claude Code (or Codex, Cursor or
+a similar agent that can run commands) in an empty folder and paste:
 
-- Python 3.11+
-- pip
+```
+Install and start the trading journal from https://github.com/CryptoGeadas/trading-journal
+on this computer. Follow the AGENTS.md file in that repository step by step,
+and offer me the demo data when it's running.
+```
 
-### Install & Run
+The agent checks Python, installs the journal, starts it and opens it in your
+browser. [AGENTS.md](AGENTS.md) holds the exact steps and the safety rules it
+must follow, for example: it never asks for your API keys in the chat.
+
+**To start it again later**, run this in the `trading-journal` folder:
+
+- Windows: `.venv\Scripts\python -m app`
+- macOS / Linux: `.venv/bin/python -m app`
+
+### Install it yourself
+
+Python 3.11 or newer:
 
 ```bash
+git clone https://github.com/CryptoGeadas/trading-journal.git
 cd trading-journal
 python -m venv .venv
-.venv/bin/pip install -e .          # Windows: .venv\Scripts\pip install -e .
-.venv/bin/python -m app             # Windows: .venv\Scripts\python -m app
+.venv/bin/python -m pip install .      # Windows: .venv\Scripts\python -m pip install .
+.venv/bin/python -m app                # Windows: .venv\Scripts\python -m app
 ```
 
-`python -m app` starts the journal and opens **http://127.0.0.1:8000** in your browser when it is ready (add `--no-browser` to skip that). Only your own computer can open it.
+`python -m app` starts the journal and opens **http://127.0.0.1:8000** when it
+is ready (add `--no-browser` to skip that). Only your own computer can open it.
 
-### Docker (alternative)
+Docker works too: `docker-compose up --build` (the port is published on this
+computer only).
+
+---
+
+## Safety facts
+
+- **Runs on your computer.** The journal listens on `127.0.0.1` only. The page
+  loads nothing from the internet (fonts and chart library are bundled); the
+  only outside calls are to the exchanges you connect.
+- **Your keys stay local.** API keys are typed into the journal's own Exchanges
+  page, stored encrypted in your data folder, and used only to read trades.
+- **Read-only use.** The code has no function that places, changes or cancels
+  orders.
+- **What each exchange lets the app check:**
+
+  | Exchange | What the app checks |
+  |----------|---------------------|
+  | Binance | Reads the key's permissions. Withdrawal, internal transfer or universal transfer enabled → refused. Permissions not reported (or the call fails) → refused. Trading permissions → accepted with a warning (Binance needs "Enable Futures" to read futures history). |
+  | Gate.io | Only that the key can read balances. Gate.io has no API that reports a key's permissions, so a key that can withdraw is **not** blocked. The form says so. |
+  | Kraken | Same as Gate.io: read access is checked, withdrawal permission can't be. |
+
+- **Backups are secret.** A backup ZIP holds the encryption key so your keys
+  still work after a restore. Keep backup files as private as a password.
+
+---
+
+## Read-only API keys
+
+Paste keys only into **Exchanges → + Add Exchange** in the journal.
+
+- **Binance:** API Management → Create API → enable **Enable Reading**; enable
+  **Enable Futures** only if you trade futures. Leave withdrawals and all
+  transfers off (the journal refuses those keys).
+- **Gate.io:** API Keys → API v4 key → **Spot: Read only**, nothing else. Make
+  sure withdrawals are off: the journal can't check this on Gate.io.
+- **Kraken:** Settings → API → **Query Funds** and **Query Open Orders &
+  Trades** only. Make sure **Withdraw Funds** is off: the journal can't check
+  this on Kraken.
+
+---
+
+## What it does
+
+- **Sync:** Sync Now plus an automatic sync every 6 hours; per-pair history, so
+  pairs added later get their full history; clear errors when an exchange
+  refuses a key or is unreachable. Fully sold pairs can be listed in
+  `extra_pairs.txt` in the data folder.
+- **Trades:** grouped orders with expandable fills, filters, sorting, notes,
+  emotion tags, 1–5 ratings, up to two chart screenshots per trade, manual
+  trades (deletable).
+- **PnL:** FIFO or average cost; spot and futures (longs and shorts), fees in
+  any coin, funding fees as their own line; breakdowns by pair, exchange,
+  strategy, emotion, month and week that add up to the total. Amounts stay in
+  their own currency: USDT, USDC and other dollar stablecoins count as one,
+  BTC or ETH amounts are never added to them.
+- **Patterns:** equity curve, win rate, profit factor, streaks, time of day (in
+  your time zone), hold times.
+- **Strategies and tags:** playbooks per strategy, emotion tags, import/export.
+- **Export:** CSV, XLSX, or ZIP with screenshots, following your filters.
+- **Demo data:** six months of made-up trades to explore first, removed with
+  one click without touching your own data.
+- **Backups:** one-click backup/restore and a daily automatic backup.
+
+---
+
+## Settings
+
+Put settings in a `.env` file in the `trading-journal` folder (copy
+`.env.example`). A real environment variable with the same name wins.
+
+| Variable | Default | What it does |
+|----------|---------|--------------|
+| `HOST` | `127.0.0.1` | Who can open the journal. Keep `127.0.0.1` (this computer only). Another value opens it to other devices on your network: the journal warns you, and you should set `AUTH_USER`/`AUTH_PASS` too. |
+| `PORT` | `8000` | Port of the journal |
+| `SYNC_INTERVAL_HOURS` | `6` | How often to pull new trades |
+| `DEFAULT_PNL_METHOD` | `fifo` | `fifo` or `avg_cost`, when none is picked on the Settings page |
+| `AUTH_USER` / `AUTH_PASS` | *(empty)* | Optional login (HTTP Basic) |
+| `BACKUP_RETENTION_COUNT` | `7` | Automatic backups to keep |
+| `TRADING_JOURNAL_DATA_DIR` | `~/.trading-journal` | Where your data lives |
+
+## Where your data lives
+
+One folder in your user profile: `~/.trading-journal` (Windows:
+`C:\Users\<you>\.trading-journal`). It holds the database, the encryption key,
+screenshots, backups and `extra_pairs.txt`, and is never inside the code
+folder, so it can't be committed to Git by accident. Settings shows the exact
+place.
+
+---
+
+## For developers
 
 ```bash
-docker-compose up --build
+python -m pip install ".[dev]"
+python -m pytest
 ```
 
-Compose publishes the port on `127.0.0.1` only. With plain `docker run`, use `-p 127.0.0.1:8000:8000`.
-
-### Configuration
-
-Copy `.env.example` to `.env` and adjust as needed. The app reads `.env` from the repo folder when it starts (Docker Compose reads it too). A real environment variable with the same name wins over `.env`.
-
-```bash
-cp .env.example .env
-```
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HOST` | `127.0.0.1` | Who can open the journal. `127.0.0.1` = only this computer. `0.0.0.0` makes it reachable from your whole network (a warning is shown; set `AUTH_USER`/`AUTH_PASS` too) |
-| `PORT` | `8000` | Server port |
-| `SYNC_INTERVAL_HOURS` | `6` | How often to pull new trades from exchanges |
-| `DEFAULT_PNL_METHOD` | `fifo` | PnL method (`fifo` or `avg_cost`) when none is chosen on the Settings page |
-| `AUTH_USER` | *(empty)* | Basic auth username (leave empty to disable auth) |
-| `AUTH_PASS` | *(empty)* | Basic auth password (leave empty to disable auth) |
-| `BACKUP_RETENTION_COUNT` | `7` | Number of auto-backups to keep |
-| `TRADING_JOURNAL_DATA_DIR` | `~/.trading-journal` | Where your database, key, screenshots and backups live (never inside the repo) |
-
----
-
-## Features
-
-### Exchange Connectivity
-- Connect to **Binance** (spot + futures), **Gate.io** (spot), and **Kraken** (spot) with API keys
-- **Adapter-based sync engine**: each exchange has its own adapter handling exchange-specific quirks, with a shared orchestrator
-- **Permission validation (Binance only)**: on Binance, keys with withdrawal or transfer permissions are refused, and so is a key whose permissions Binance does not report. Gate.io and Kraken have no API that reports a key's permissions, so the app cannot check them: use a read-only key. Trading permissions are allowed with a warning (Binance requires "Enable Futures" for reading futures trade history; the app contains no order-placement code)
-- API credentials encrypted at rest (Fernet symmetric encryption)
-- Automatic sync every 6 hours + manual "Sync Now" button
-- **Per-exchange sync start date**: choose how far back to pull trades when connecting an exchange
-- **Smart pair discovery**: finds trades via balance detection + tracked pairs history + `extra_pairs.txt` for fully-sold positions
-- **Tracked pairs**: pairs that have been seen in trades are remembered in the database and always re-checked on future syncs
-- Exchange-specific sync handling (Gate.io per-symbol fetching, Binance spot + futures separate clients, Kraken bulk fetch with per-symbol fallback)
-- **Binance futures**: syncs USDT-margined and USDC-margined perpetual trades + funding fee history
-- Sync log with status tracking and error messages
-- Stale sync warnings when data is >24 hours old
-
-### Trades Table
-- Full trade table with sorting (time, pair, exchange, total) and pagination
-- **Order grouping**: multiple fills from the same order shown as one row with combined totals and weighted average price
-- **Expandable fills**: click the fill count to see individual execution details
-- **Trade type filter**: filter between Spot, Futures, or both. Futures trades show a yellow "PERP" badge
-- Filter bar: by exchange, pair, trade type, side, strategy, and date range
-- **Chart screenshots**: upload up to 2 chart images per trade (10 MB max), shown as thumbnails with click-to-enlarge lightbox
-- **Trade notes**: click any trade row to open a detail panel with an editable notes field
-- **Emotion tagging**: assign an emotion tag (e.g. FOMO, Followed Plan, Revenge Trade) to each trade from a dropdown
-- **Trade rating**: rate each trade 1-5 stars to track execution quality over time
-- **Manual trade entry**: add trades manually for OTC deals, unlisted exchanges, or corrections
-
-### PnL & Analytics
-- **FIFO PnL engine**: calculates realised profit/loss by matching buys against sells using First-In-First-Out cost basis
-- **PnL breakdown**: group by pair, exchange, strategy, emotion tag, month, or week
-- **Performance stats**: win rate, profit factor, average win/loss, best/worst pair
-- **Equity curve**: interactive area chart on the overview page showing cumulative PnL over time (powered by lightweight-charts)
-- **Overview dashboard**: real-time stats including total PnL, monthly/weekly PnL, fees, win rate
-- **Pattern detection**: win/loss streaks, time-of-day performance analysis, average hold time per trade
-
-### Emotion Tags
-- **7 built-in tags**: Followed Plan, FOMO, Revenge Trade, High Conviction, Impulse, Overtraded, News-Driven
-- Create custom tags with name and colour
-- Rename or delete tags (cascades to tagged trades)
-- **Import/Export**: download all tags as JSON backup, restore from file
-- **PnL grouping**: break down profitability by emotion to identify behavioural patterns
-
-### Export
-- Download filtered trades as **CSV** or **XLSX**
-- **ZIP export with screenshots**: check "Charts" before exporting to get a ZIP containing the spreadsheet plus a `screenshots/` folder with chart images named by pair and date
-- Exports include a "Type" column (Spot/Futures) and respect all active filters
-- Grouped orders exported as single rows with combined quantities and weighted average prices
-
-### Strategy System
-- **Strategies page**: create, edit, and delete trading strategies with dedicated sidebar tab
-- Each strategy has: name, colour (9 options), short description, and a **playbook** (rules, entry/exit criteria, notes)
-- **Trade tagging**: click the Strategy column on any trade to assign a strategy from a dropdown
-- Strategy-coloured badges in the trades table
-- **Import/Export**: download all strategies as JSON backup, restore from file
-
-### Notebook
-- **Notes page**: dedicated sidebar tab for general notes, research, and observations (max 4 notes)
-- Each note has an editable title and a large text area
-- Auto-saves on blur
-
-### Hardening
-- **Optional basic auth**: set `AUTH_USER` and `AUTH_PASS` in `.env` to protect the dashboard with HTTP Basic Authentication
-- **Backup/restore**: one-click download of a ZIP containing the database, the encryption key, screenshots, and extra_pairs.txt, so exchange keys still work after a restore on another computer. **Keep backup files private**: the key inside unlocks your saved API keys. Restore from any backup file
-- **Daily auto-backup**: the scheduler automatically saves a backup every 24 hours to the `backups/` folder in your data folder, keeping the most recent backups (configurable via `BACKUP_RETENTION_COUNT`)
-- **Toast notifications**: all confirmations and errors shown as slide-in toasts (no browser alert popups)
-- **Stale data warnings**: overview page and exchange cards flag when sync is overdue (>24 hours)
-
----
-
-## API Key Setup
-
-### Binance
-
-1. Go to **API Management** in your Binance account settings
-2. Create a new API key
-3. Permissions to **enable**:
-   - ☑ Enable Reading (required)
-   - ☑ Enable Futures (required for futures trade history — this also grants trade capability, but the app never places orders)
-4. Permissions to **disable**:
-   - ☐ Enable Spot & Margin Trading (not needed for spot read access)
-   - ☐ Enable Withdrawals (the app refuses keys that have it)
-   - ☐ Enable Internal Transfer (the app refuses keys that have it)
-5. Copy the API Key and Secret
-
-### Gate.io
-
-1. Go to **API Key Management** in your Gate.io account settings
-2. Create a new **API v4 Key**
-3. Enable **Spot Trade** with **Read Only** selected
-4. Leave all other permissions off. **The app cannot check this on Gate.io**, so make sure withdrawals are off.
-5. Copy the API Key, Secret, and Passphrase
-
-### Kraken
-
-1. Go to **Settings > API** in your Kraken account
-2. Create a new API key
-3. Enable **Query Funds** and **Query Open Orders & Trades** permissions
-4. Leave all other permissions off. **The app cannot check this on Kraken**, so make sure "Withdraw Funds" is off.
-5. Copy the API Key and Private Key
-
----
-
-## Security
-
-### Permission Model
-
-The app uses a two-layer security model:
-
-1. **Code-level protection** (primary): The codebase contains **no functions** that can place, modify, or cancel orders. Even if an API key has trading permissions, the app physically cannot use them.
-
-2. **Permission validation** (secondary), what each exchange really allows:
-
-   | Exchange | What the app checks |
-   |----------|---------------------|
-   | Binance | Reads the key's permissions. Withdrawal or Transfer enabled → refused. Permissions not reported (or the call fails) → refused. Trading permissions → accepted with a warning (needed for futures history). |
-   | Gate.io | Only that the key can read balances. Gate.io has no API that reports a key's permissions, so a key that can withdraw is **not** blocked. The form and a warning after connecting say so. |
-   | Kraken | Same as Gate.io: read access only, withdrawal permission cannot be checked. |
-
-### Data Safety
-
-- **All data stays local** — everything lives in one data folder in your user profile: `~/.trading-journal` (on Windows `C:\Users\<you>\.trading-journal`). Set `TRADING_JOURNAL_DATA_DIR` to use another folder. The Settings page shows where it is.
-- **Outside the repo** — the data folder is never inside the code folder, so it can't be committed to Git by accident. Older versions kept data in the repo's `data/` folder; it is moved to the data folder automatically on first start (existing files are never overwritten).
-- **API keys encrypted at rest** — Fernet encryption, key stored in `.encryption_key` in your data folder
-- **Strategy & emotion tag backup** — export/import as JSON to protect against database resets
-- **Extra pairs file** — `extra_pairs.txt` in your data folder survives database resets (add fully-sold pairs here)
-- **Full backup/restore** — download everything as a ZIP from the Settings page (includes the encryption key: treat the file like a password)
-- **Key file guard** — if `.encryption_key` goes missing while exchange keys are saved, the app stops with a clear message instead of making a new key that would lock those keys for good
-- **Auto-backup** — daily snapshots with automatic rotation
-
-### GitHub Safety
-
-Private files live in your data folder, outside the repo:
-- `journal.db` (contains encrypted API keys and trade data)
-- `.encryption_key` (the encryption key — if this leaks, API keys can be decrypted)
-- `screenshots/` (personal chart images)
-- `backups/` (auto-backup ZIPs)
-- `extra_pairs.txt` (custom pair list)
-
-`.env` (auth credentials) and any old in-repo `data/` folder are also in `.gitignore`.
-
-**If you previously committed without a proper .gitignore**, you should rotate your API keys on the exchanges and delete the old keys.
-
----
-
-## Project Structure
-
-```
-trading-journal/
-├── app/
-│   ├── main.py               # FastAPI entry point + optional auth middleware
-│   ├── config.py             # Environment settings
-│   ├── database.py           # SQLite + versioned migrations (v1–v7)
-│   ├── models.py             # Pydantic request/response schemas
-│   ├── encryption.py         # API key encryption (Fernet)
-│   ├── scheduler.py          # APScheduler for periodic sync + auto-backup
-│   ├── exchanges/
-│   │   ├── base.py           # ExchangeAdapter ABC + shared helpers
-│   │   ├── binance.py        # Binance adapter (spot + futures + funding)
-│   │   ├── gateio.py         # Gate.io adapter (spot, per-symbol)
-│   │   ├── kraken.py         # Kraken adapter (spot, bulk + per-symbol)
-│   │   ├── connector.py      # ccxt wrapper + adapter factory
-│   │   └── sync.py           # Sync orchestrator (pair tracking, dedup)
-│   ├── services/
-│   │   └── backup.py         # Shared backup logic (ZIP creation, retention)
-│   └── api/
-│       ├── routes_overview.py    # Dashboard stats with real PnL
-│       ├── routes_trades.py      # Grouped orders, fills, tagging, manual entry
-│       ├── routes_exchanges.py   # Connect, sync, remove exchanges
-│       ├── routes_pnl.py         # FIFO PnL engine + equity curve endpoint
-│       ├── routes_export.py      # CSV/XLSX/ZIP export
-│       ├── routes_strategies.py  # Strategy CRUD + import/export
-│       ├── routes_emotion_tags.py # Emotion tag CRUD + import/export
-│       ├── routes_screenshots.py # Upload/serve/delete trade screenshots
-│       ├── routes_patterns.py    # Streak, time-of-day, hold time analysis
-│       ├── routes_funding.py     # Funding fee history
-│       ├── routes_notes.py       # General notebook (max 4 notes)
-│       └── routes_backup.py      # Full backup/restore as ZIP
-├── frontend/
-│   ├── index.html            # Single-page dashboard
-│   ├── css/app.css           # Dark terminal theme with card effects
-│   └── js/
-│       ├── api.js            # API client
-│       └── app.js            # Navigation, rendering, interactions
-├── tests/
-│   ├── conftest.py           # Shared fixtures (fresh DB with all migrations)
-│   ├── test_pnl.py           # FIFO matching engine tests
-│   ├── test_dedup.py         # Trade insert + deduplication tests
-│   ├── test_encryption.py    # Encryption round-trip tests
-│   └── test_paths.py         # Data folder location + migration tests
-├── .env.example              # Environment variable template
-├── .gitignore
-├── docker-compose.yml
-├── Dockerfile
-├── pyproject.toml
-└── README.md
-```
-
----
-
-## Database Migrations
-
-Migrations run automatically on startup:
-
-| Version | What it adds |
-|---------|-------------|
-| v1 | exchanges, trades, sync_log tables + indexes |
-| v2 | order_id column on trades (fill grouping) |
-| v3 | strategies table |
-| v4 | trade_screenshots table |
-| v5 | funding_fees table + trade_type index |
-| v6 | notes table |
-| v7 | tracked_pairs + emotion_tags tables, sync_start_date on exchanges, emotion_tag + trade_rating on trades |
-
-If you delete `journal.db`, the app recreates everything from scratch.
-
----
-
-## Tests
-
-```bash
-pip install ".[dev]"
-pytest tests/ -v
-```
-
-Covers FIFO PnL matching, trade deduplication, and API key encryption.
-
----
-
-## API Documentation
-
-When the server is running, visit **http://localhost:8000/docs** for the auto-generated Swagger UI listing all endpoints.
+The tests use a temporary data folder and never touch yours. API docs:
+http://127.0.0.1:8000/docs while the journal runs. How the code is laid out:
+[docs/setup.md](docs/setup.md).
