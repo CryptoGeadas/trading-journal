@@ -13,6 +13,8 @@ dependencies = [
     "apscheduler>=3.10",
     "openpyxl>=3.1",
     "cryptography>=42.0",
+    # Time-zone database for zoneinfo; slim Linux/Docker images have none.
+    "tzdata",
 ]
 
 [project.optional-dependencies]

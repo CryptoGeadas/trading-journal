@@ -641,3 +641,9 @@ def test_a_folder_name_as_time_zone_falls_back_to_utc(api):
     assert resp.status_code == 200
     tod = next(p["data"] for p in resp.json()["patterns"] if p["type"] == "time_of_day")
     assert tod["time_zone"] == "UTC"
+
+
+def test_time_zone_data_is_installed():
+    # Without it every browser time zone quietly falls back to UTC.
+    from zoneinfo import ZoneInfo
+    assert ZoneInfo("Europe/Lisbon").key == "Europe/Lisbon"
