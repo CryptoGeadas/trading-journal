@@ -1,5 +1,7 @@
 """Demo data endpoints — load, check and remove the demo journal."""
 
+import sqlite3
+
 from fastapi import APIRouter, HTTPException
 
 from app.database import get_db
@@ -26,6 +28,8 @@ def load_demo():
             counts = demo.load(db)
         except ValueError as e:
             raise HTTPException(status_code=409, detail=str(e))
+        except sqlite3.IntegrityError:  # a second click raced the first load
+            raise HTTPException(status_code=409, detail="Demo data is already loaded.")
         return {"status": "loaded", **counts}
     finally:
         db.close()

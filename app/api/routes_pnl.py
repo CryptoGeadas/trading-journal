@@ -23,7 +23,10 @@ METHOD_PATTERN = "^(fifo|avg_cost)$"
 
 def load_fills(db) -> list[dict]:
     """Every fill, oldest first. Matching needs the full history of each pair."""
-    return [dict(r) for r in db.execute("SELECT * FROM trades ORDER BY timestamp ASC").fetchall()]
+    return [dict(r) for r in db.execute(
+        """SELECT t.*, COALESCE(e.is_demo, 0) AS is_demo FROM trades t
+           LEFT JOIN exchanges e ON e.id = t.exchange_id ORDER BY t.timestamp ASC"""
+    ).fetchall()]
 
 
 def load_funding(db) -> list[dict]:

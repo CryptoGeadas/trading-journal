@@ -236,10 +236,11 @@ def match(fills: Iterable[dict], funding: Iterable[dict] = (), method: str = "fi
         raise ValueError(f"unknown PnL method {method!r}")
     by_pair = defaultdict(list)
     for f in fills:
-        by_pair[(f["pair"], f.get("trade_type") or "spot")].append(f)
+        # Demo fills are matched among themselves only, never with real fills.
+        by_pair[(f["pair"], f.get("trade_type") or "spot", bool(f.get("is_demo")))].append(f)
 
     result = MatchResult()
-    for (pair, trade_type), pair_fills in by_pair.items():
+    for (pair, trade_type, _), pair_fills in by_pair.items():
         pair_fills.sort(key=_fill_order)
         _match_pair(pair, trade_type, pair_fills, method, result)
 

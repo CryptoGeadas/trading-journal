@@ -105,3 +105,97 @@ def test_a_demo_strategy_used_on_a_real_trade_is_kept(api):
                                   "strategy": "Mean Reversion"})
     api.delete("/api/demo", params={"confirm": True})
     assert [s["name"] for s in api.get("/api/strategies").json()] == ["Mean Reversion"]
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+
+
+def _real_exchange_with_rows():
+    db = get_db()
+    db.execute("INSERT INTO exchanges (id, exchange, api_key_enc, api_secret_enc) VALUES ('real1', 'binance', 'x', 'y')")
+    db.execute("""INSERT INTO funding_fees (id, exchange_id, exchange, timestamp, pair, amount, asset)
+                  VALUES ('rf', 'real1', 'binance', '2026-06-01T08:00:00.000Z', 'BTC/USDT:USDT', -1, 'USDT')""")
+    db.execute("INSERT INTO tracked_pairs (exchange_id, pair) VALUES ('real1', 'BTC/USDT')")
+    db.execute("INSERT INTO sync_log (exchange_id, status) VALUES ('real1', 'success')")
+    db.commit()
+    db.close()
+
+
+def test_real_trades_are_never_matched_with_demo_trades(api):
+    api.post("/api/trades", json={"pair": "BTC/USDT", "side": "buy", "quantity": 1, "price": 10000,
+                                  "timestamp": "2026-01-01T00:00:00Z"})
+    api.post("/api/demo")
+    loaded = api.get("/api/pnl").json()
+    api.delete("/api/demo", params={"confirm": True})
+    db = get_db()
+    db.execute("DELETE FROM trades")
+    db.commit()
+    db.close()
+    api.post("/api/demo")
+    demo_only = api.get("/api/pnl").json()
+    assert (loaded["total_pnl"], loaded["trade_count"]) == (demo_only["total_pnl"], demo_only["trade_count"])
+
+
+def test_remove_keeps_real_rows_in_every_table(api):
+    from app import paths
+    _real_exchange_with_rows()
+    trade = api.post("/api/trades", json={"pair": "BTC/USDT", "side": "buy", "quantity": 1, "price": 1}).json()
+    shot = api.post(f"/api/trades/{trade['id']}/screenshots", files={"file": ("c.png", PNG, "image/png")}).json()
+    api.post("/api/demo")
+    api.delete("/api/demo", params={"confirm": True})
+    db = get_db()
+    counts = [db.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+              for t in ("exchanges", "funding_fees", "tracked_pairs", "sync_log", "trade_screenshots", "trades")]
+    db.close()
+    assert counts == [2, 1, 1, 1, 1, 1]  # real1 + the manual source
+    assert (paths.screenshots_dir() / shot["filename"]).exists()
+
+
+def test_the_scheduler_still_syncs_real_connections(api, monkeypatch):
+    from app import scheduler
+    _real_exchange_with_rows()
+    api.post("/api/demo")
+    synced = []
+    monkeypatch.setattr(scheduler, "sync_exchange", lambda eid: synced.append(eid) or {"status": "success", "trades_fetched": 0})
+    scheduler._sync_all_exchanges()
+    assert synced == ["real1"]
+
+
+def test_removing_demo_deletes_screenshots_of_demo_trades_even_when_a_file_is_stuck(api, monkeypatch):
+    from pathlib import Path
+    api.post("/api/demo")
+    trade_id = api.get("/api/trades").json()["trades"][0]["id"]
+    api.post(f"/api/trades/{trade_id}/screenshots", files={"file": ("c.png", PNG, "image/png")})
+
+    def stuck(self, missing_ok=False):
+        raise PermissionError("in use")
+    monkeypatch.setattr(Path, "unlink", stuck)
+    resp = api.delete("/api/demo", params={"confirm": True})
+    assert resp.status_code == 200 and len(resp.json()["files_left"]) == 1
+    db = get_db()
+    assert db.execute("SELECT COUNT(*) FROM trade_screenshots").fetchone()[0] == 0
+    db.close()
+
+
+def test_demo_loads_again_after_removal(api):
+    first = api.post("/api/demo").json()
+    api.delete("/api/demo", params={"confirm": True})
+    assert api.post("/api/demo").json() == first
+
+
+def test_an_edited_demo_note_or_strategy_is_kept(api):
+    api.post("/api/demo")
+    note = next(n for n in api.get("/api/notes").json() if n["title"] == "Rules")
+    api.patch(f"/api/notes/{note['id']}", json={"title": "My real rules"})
+    strategy = next(s for s in api.get("/api/strategies").json() if s["name"] == "Trend Pullback")
+    api.patch(f"/api/strategies/{strategy['id']}", json={"playbook": "my own"})
+    api.delete("/api/demo", params={"confirm": True})
+    assert [n["title"] for n in api.get("/api/notes").json()] == ["My real rules"]
+    assert [s["name"] for s in api.get("/api/strategies").json()] == ["Trend Pullback"]
+
+
+def test_a_real_strategy_in_another_case_gets_the_demo_trades(api):
+    api.post("/api/strategies", json={"name": "breakout"})
+    assert api.post("/api/demo").json()["strategies"] == 2
+    groups = {g["group"] for g in api.get("/api/pnl", params={"group_by": "strategy"}).json()["breakdown"]}
+    assert "breakout" in groups and "Breakout" not in groups

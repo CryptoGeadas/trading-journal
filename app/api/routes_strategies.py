@@ -141,6 +141,7 @@ def update_strategy(strategy_id: str, body: StrategyUpdate):
 
         if updates:
             updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+            updates["is_demo"] = 0  # edited by the user: it is theirs now, kept when demo data goes
             set_clause = ", ".join(f"{k} = ?" for k in updates)
             db.execute(
                 f"UPDATE strategies SET {set_clause} WHERE id = ?",

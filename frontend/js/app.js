@@ -46,17 +46,25 @@ async function refreshDemoBanner() {
         const remove = document.getElementById('btn-remove-demo');
         if (load) load.style.display = loaded ? 'none' : '';
         if (remove) remove.style.display = loaded ? '' : 'none';
+        const note = sessionStorage.getItem('tj-demo-note');
+        if (note) {  // set just before the reload that follows load/remove
+            sessionStorage.removeItem('tj-demo-note');
+            showToast(note, 'success');
+        }
     } catch (err) {
-        console.error('Could not check for demo data:', err);
+        showToast('Could not check whether demo data is loaded: ' + err.message, 'error', 8000);
     }
 }
 
 async function loadDemo() {
+    const buttons = document.querySelectorAll('[data-action=load-demo]');
+    buttons.forEach(b => { b.disabled = true; });
     try {
         const result = await API.loadDemo();
-        showToast(`Demo data loaded: ${result.trades} fills, ${result.funding} funding payments.`, 'success');
+        try { sessionStorage.setItem('tj-demo-note', `Demo data loaded: ${result.trades} fills, ${result.funding} funding payments.`); } catch (e) { /* no storage: no toast */ }
         window.location.reload();
     } catch (err) {
+        buttons.forEach(b => { b.disabled = false; });
         showToast('Could not load demo data: ' + err.message, 'error');
     }
 }
@@ -65,7 +73,7 @@ async function removeDemo() {
     if (!confirm('Remove all demo data? Your own trades, strategies and notes stay.')) return;
     try {
         await API.removeDemo();
-        showToast('Demo data removed.', 'success');
+        try { sessionStorage.setItem('tj-demo-note', 'Demo data removed.'); } catch (e) { /* no storage: no toast */ }
         window.location.reload();
     } catch (err) {
         showToast('Could not remove demo data: ' + err.message, 'error');

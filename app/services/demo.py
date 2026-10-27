@@ -166,8 +166,11 @@ def load(db, seed: int = DEFAULT_SEED, today: date | None = None) -> dict:
     for account, (exchange, label) in DEMO_ACCOUNTS.items():
         db.execute("""INSERT INTO exchanges (id, exchange, label, api_key_enc, api_secret_enc, is_read_only, is_demo)
                       VALUES (?, ?, ?, '', '', 1, 1)""", [account, exchange, label])
-    existing = {r[0].lower() for r in db.execute("SELECT name FROM strategies").fetchall()}
+    existing = {r[0].lower(): r[0] for r in db.execute("SELECT name FROM strategies").fetchall()}
     strategies = [s for s in data.strategies if s["name"].lower() not in existing]  # never touch a real one
+    for t in data.trades:  # tag with the real strategy's exact name ("breakout", not "Breakout")
+        if t["strategy"] and t["strategy"].lower() in existing:
+            t["strategy"] = existing[t["strategy"].lower()]
     for s in strategies:
         db.execute("""INSERT INTO strategies (id, name, description, colour, playbook, is_demo)
                       VALUES (?, ?, ?, ?, ?, 1)""", [s["id"], s["name"], s["description"], s["colour"], s["playbook"]])
@@ -218,6 +221,11 @@ def remove(db) -> dict:
     counts["strategies"] = db.execute("DELETE FROM strategies WHERE is_demo = 1").rowcount
     counts["notes"] = db.execute("DELETE FROM notes WHERE is_demo = 1").rowcount
     db.commit()
-    for name in shots:
-        (paths.screenshots_dir() / name).unlink(missing_ok=True)
+    counts["files_left"] = []
+    for name in shots:  # rows are gone already; a locked file must not turn that into an error
+        try:
+            (paths.screenshots_dir() / name).unlink(missing_ok=True)
+        except OSError as e:
+            print(f"[demo] Could not remove screenshot {name}: {e}")
+            counts["files_left"].append(name)
     return counts
