@@ -172,3 +172,18 @@ def test_demo_group(api):
     assert api.post("/api/demo").status_code == 409
     assert ok(api.delete("/api/demo", params={"confirm": True}))["trades"] > 0
     assert ok(api.get("/api/demo")) == {"loaded": False}
+
+
+def test_the_page_itself_is_served(api):
+    page = api.get("/")
+    assert page.status_code == 200 and "text/html" in page.headers["content-type"]
+    assert 'id="demo-banner"' in page.text
+
+
+def test_strategy_and_tag_export_import_round_trip(api):
+    strategies = api.get("/api/strategies-export").json()
+    tags = api.get("/api/emotion-tags-export").json()
+    again = ok(api.post("/api/strategies-import", json=strategies))
+    assert again["imported"] == 0 and again["skipped"] == 3  # all names exist already
+    ok(api.post("/api/emotion-tags-import", json=tags))
+    assert len(ok(api.get("/api/strategies"))) == 3
