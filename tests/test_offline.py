@@ -38,9 +38,19 @@ def test_bundled_files_exist_and_keep_their_licences():
     assert (vendor / "lightweight-charts" / "NOTICE").is_file()
     fonts = list((vendor / "fonts").glob("*.woff2"))
     assert fonts
-    for licence in ("OFL-Chakra-Petch.txt", "OFL-Space-Grotesk.txt"):
+    # Same fonts as the site's v2 style: only Geist and Geist Mono, each with its licence.
+    assert {p.name.split("-latin")[0] for p in fonts} == {"geist", "geist-mono"}
+    for licence in ("OFL-Geist.txt", "OFL-Geist-Mono.txt"):
         assert (vendor / "fonts" / licence).is_file()
-    assert (vendor / "fonts" / "OFL-JetBrains-Mono.txt").is_file()
+
+
+def test_site_style_snapshot_is_v2():
+    tokens = (FRONTEND / "vendor" / "site-style" / "site-tokens.css").read_text(encoding="utf-8")
+    assert "--accent: #7ee0a8;" in tokens
+    assert '--font-body: "Geist"' in tokens
+    assert '--font-mono: "Geist Mono"' in tokens
+    for name in ("bg", "panel", "border", "fg", "muted", "accent", "up", "down"):
+        assert re.search(rf"--hex-{name}: #[0-9a-f]{{6}};", tokens), name
 
 
 def test_every_bundled_font_is_declared_and_every_declared_font_exists():

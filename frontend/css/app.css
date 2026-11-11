@@ -9,33 +9,35 @@
     /* Surfaces */
     --bg-root:        var(--bg);
     --bg-surface:     var(--panel);
-    --bg-raised:      color-mix(in oklch, var(--panel), var(--fg) 4%);
-    --bg-hover:       color-mix(in oklch, var(--panel), var(--fg) 7%);
-    --bg-modal:       color-mix(in oklch, var(--bg) 82%, transparent);
+    /* The site's own surface and text steps. (Mixing the near-grey v2 colours in oklch
+       drifted the hue to brown, so mixes below use srgb.) */
+    --bg-raised:      var(--hover);
+    --bg-hover:       color-mix(in srgb, var(--hover), var(--fg) 4%);
+    --bg-modal:       color-mix(in srgb, var(--bg) 82%, transparent);
 
     /* Borders */
-    --border-light:   color-mix(in oklch, var(--border), var(--fg) 12%);
+    --border-light:   var(--border-strong);
 
     /* Text */
     --text-primary:   var(--fg);
     --text-secondary: var(--muted);
-    --text-muted:     color-mix(in oklch, var(--muted) 72%, var(--bg));
+    --text-muted:     var(--faint);
 
-    /* Accent (--accent itself is the site's lime) */
-    --accent-dim:     color-mix(in oklch, var(--accent) 12%, transparent);
-    --accent-hover:   color-mix(in oklch, var(--accent), var(--fg) 15%);
+    /* Accent (--accent itself is the site's mint) */
+    --accent-dim:     color-mix(in srgb, var(--accent) 12%, transparent);
+    --accent-hover:   color-mix(in srgb, var(--accent), var(--fg) 15%);
 
     /* Semantic */
     --green:          var(--up);
-    --green-dim:      color-mix(in oklch, var(--up) 12%, transparent);
+    --green-dim:      color-mix(in srgb, var(--up) 12%, transparent);
     --red:            var(--down);
-    --red-dim:        color-mix(in oklch, var(--down) 12%, transparent);
-    --red-line:       color-mix(in oklch, var(--down) 30%, transparent);
+    --red-dim:        color-mix(in srgb, var(--down) 12%, transparent);
+    --red-line:       color-mix(in srgb, var(--down) 30%, transparent);
     --yellow:         var(--warn);
-    --yellow-dim:     color-mix(in oklch, var(--warn) 12%, transparent);
-    --yellow-line:    color-mix(in oklch, var(--warn) 30%, transparent);
-    --overlay:        color-mix(in oklch, var(--bg) 90%, transparent);
-    --overlay-ctl:    color-mix(in oklch, var(--fg) 15%, transparent);
+    --yellow-dim:     color-mix(in srgb, var(--warn) 12%, transparent);
+    --yellow-line:    color-mix(in srgb, var(--warn) 30%, transparent);
+    --overlay:        color-mix(in srgb, var(--bg) 90%, transparent);
+    --overlay-ctl:    color-mix(in srgb, var(--fg) 15%, transparent);
 
     /* Typography (--font-mono is the site's) */
     --font-sans:      var(--font-body);
@@ -403,7 +405,7 @@ body {
 }
 
 .data-table tbody tr:nth-child(even) {
-    background: color-mix(in oklch, var(--bg) 30%, transparent);
+    background: color-mix(in srgb, var(--bg) 30%, transparent);
 }
 
 .data-table tbody tr:hover {

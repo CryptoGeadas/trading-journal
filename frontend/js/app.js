@@ -145,7 +145,7 @@ async function loadEquityCurve() {
 
         const c = chartColours();
         const chart = LightweightCharts.createChart(container, {
-            layout: { background: { color: c.panel }, textColor: c.muted, fontFamily: 'JetBrains Mono, monospace' },
+            layout: { background: { color: c.panel }, textColor: c.muted, fontFamily: '"Geist Mono", monospace' },
             grid: { vertLines: { color: c.border }, horzLines: { color: c.border } },
             width: container.clientWidth,
             height: 300,
