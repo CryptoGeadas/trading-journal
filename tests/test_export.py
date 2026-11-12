@@ -214,3 +214,24 @@ def test_signed_numbers_stay_numbers(api):
 def test_control_characters_in_notes_do_not_break_the_xlsx(api):
     _add(api, notes="pasted\x01text\x0b")
     assert _xlsx(api)[0]["Notes"].value == "pastedtext"
+
+
+def _orders(api):
+    return api.get("/api/trades").json()["trades"]
+
+
+def test_trades_page_shows_mixed_fee_coins_like_the_export(api):
+    _add(api, order_id="o1", fee=0.5, fee_currency="USDT")
+    _add(api, order_id="o1", fee=0.001, fee_currency="BNB", timestamp="2026-01-01T00:00:01Z")
+    order = _orders(api)[0]
+    assert (order["fee"], order["fee_currency"], order["fee_text"]) == (None, "mixed", "0.001 BNB; 0.5 USDT")
+    row = _csv(api)[0]
+    assert (row["Fee"], row["Fee Currency"]) == (order["fee_text"], order["fee_currency"])
+
+
+def test_trades_page_sums_fees_paid_in_one_coin(api):
+    _add(api, order_id="o1", fee=0.5, fee_currency="USDT")
+    _add(api, order_id="o1", fee=0.25, fee_currency="USDT", timestamp="2026-01-01T00:00:01Z")
+    order = _orders(api)[0]
+    assert (order["fee"], order["fee_currency"], order["fee_text"]) == (0.75, "USDT", None)
+    assert _csv(api)[0]["Fee Currency"] == "USDT"

@@ -9,6 +9,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
+from app.services.orders import mixed_fee_text
 from app import paths
 from app.database import get_db
 from app.services.pnl_engine import currency_unit
@@ -98,11 +99,7 @@ def _query_grouped_trades(
         for row in rows:
             if row.pop("fee_currency_count") > 1:
                 # Fills paid fees in different coins (e.g. USDT and BNB): never add them up.
-                ids = row["fill_ids"].split(",")
-                parts = db.execute(
-                    f"""SELECT fee_currency, SUM(fee) FROM trades WHERE id IN ({",".join("?" * len(ids))})
-                        GROUP BY fee_currency ORDER BY fee_currency""", ids).fetchall()
-                row["fee"] = "; ".join(f"{amount:g} {currency or '?'}" for currency, amount in parts)
+                row["fee"] = mixed_fee_text(db, row["fill_ids"].split(","))
                 row["fee_currency"] = "mixed"
             row.pop("fill_ids")
         return rows

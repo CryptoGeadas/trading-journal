@@ -437,7 +437,7 @@ function renderTradesTable(trades) {
             <td class="mono">${esc(formatQty(t.quantity))}</td>
             <td class="mono">${esc(formatPrice(t.price))}</td>
             <td class="mono">${esc(formatCurrency(t.total, t.quote_currency))}</td>
-            <td class="mono">${esc(formatFee(t.fee, t.fee_currency))}</td>
+            <td class="mono">${esc(formatFee(t.fee, t.fee_currency, t.fee_text))}</td>
             <td class="strategy-cell" data-action="tag-popup" data-id="${esc(t.id)}" data-strategy="${esc(t.strategy || '')}">${strategyCell}</td>
             <td class="screenshots-cell" id="ss-${esc(t.id)}" data-action="none">
                 <div class="ss-row" id="ssr-${esc(t.id)}">
@@ -680,7 +680,9 @@ function formatPrice(val) {
     return val.toLocaleString('en-US', { maximumFractionDigits: 8 });
 }
 
-function formatFee(val, currency) {
+function formatFee(val, currency, text) {
+    if (text) return text;   // fills paid in different coins: one amount per coin, never a sum
+    if (val == null) return '—';
     if (val === 0) return '—';
     return `${val.toFixed(4)} ${currency}`;
 }
@@ -1328,7 +1330,7 @@ function openTradeDetail(tradeId, tradeData) {
                 <div class="detail-item"><span class="detail-label">Quantity</span><span class="detail-value mono">${esc(formatQty(tradeData.quantity))}</span></div>
                 <div class="detail-item"><span class="detail-label">Price</span><span class="detail-value mono">${esc(formatPrice(tradeData.price))}</span></div>
                 <div class="detail-item"><span class="detail-label">Total</span><span class="detail-value mono">${esc(formatCurrency(tradeData.total, tradeData.quote_currency))}</span></div>
-                <div class="detail-item"><span class="detail-label">Fee</span><span class="detail-value mono">${esc(formatFee(tradeData.fee, tradeData.fee_currency))}</span></div>
+                <div class="detail-item"><span class="detail-label">Fee</span><span class="detail-value mono">${esc(formatFee(tradeData.fee, tradeData.fee_currency, tradeData.fee_text))}</span></div>
             </div>
             ${isManualTrade(tradeData) ? `<div class="form-row" style="margin-top: 0.75rem">
                 <button class="btn btn-ghost btn-sm" data-action="delete-trade" data-id="${esc(tradeId)}">Delete manual trade</button>

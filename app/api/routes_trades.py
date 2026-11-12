@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
+from app.services.orders import mixed_fee_text
 from app import paths, timeutil
 from app.database import get_db
 from app.services.pnl_engine import TradeFilter
@@ -91,6 +92,8 @@ async def list_trades(
                 SUM(total)           as total,
                 SUM(fee)             as fee,
                 MIN(fee_currency)    as fee_currency,
+                COUNT(DISTINCT fee_currency) as fee_currency_count,
+                GROUP_CONCAT(id)     as fill_ids,
                 MIN(trade_type)      as trade_type,
                 MIN(strategy)        as strategy,
                 MIN(notes)           as notes,
@@ -106,6 +109,9 @@ async def list_trades(
 
         orders = []
         for r in rows:
+            # Fills paid fees in different coins (e.g. USDT and BNB): never add them up (as the export).
+            mixed = r["fee_currency_count"] > 1
+            fee_text = mixed_fee_text(db, r["fill_ids"].split(",")) if mixed else None
             orders.append(OrderOut(
                 id=r["id"],
                 group_id=r["group_id"],
@@ -120,8 +126,9 @@ async def list_trades(
                 quantity=r["quantity"],
                 price=round(r["price"], 8),
                 total=r["total"],
-                fee=r["fee"],
-                fee_currency=r["fee_currency"],
+                fee=None if mixed else r["fee"],
+                fee_currency="mixed" if mixed else r["fee_currency"],
+                fee_text=fee_text,
                 trade_type=r["trade_type"],
                 strategy=r["strategy"],
                 notes=r["notes"],

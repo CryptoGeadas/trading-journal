@@ -114,8 +114,9 @@ class OrderOut(BaseModel):
     quantity: float
     price: float
     total: float
-    fee: float
-    fee_currency: str
+    fee: Optional[float] = None       # None when the fills paid in different coins
+    fee_currency: str                 # "mixed" in that case
+    fee_text: Optional[str] = None    # then: one amount per coin, e.g. "0.001 BNB; 0.5 USDT"
     trade_type: str
     strategy: Optional[str] = None
     notes: Optional[str] = None
